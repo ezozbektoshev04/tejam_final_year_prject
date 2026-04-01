@@ -1,0 +1,115 @@
+from flask import Blueprint, request, jsonify
+from flask_jwt_extended import jwt_required, get_jwt_identity
+from models import db, User, Shop, FoodItem
+
+food_bp = Blueprint("food_items", __name__)
+
+
+@food_bp.route("/", methods=["GET"])
+def list_items():
+    query = FoodItem.query.filter_by(is_available=True)
+
+    shop_id = request.args.get("shop_id")
+    search = request.args.get("search")
+
+    if shop_id:
+        query = query.filter_by(shop_id=int(shop_id))
+    if search:
+        query = query.filter(
+            db.or_(
+                FoodItem.name.ilike(f"%{search}%"),
+                FoodItem.description.ilike(f"%{search}%"),
+            )
+        )
+
+    items = query.order_by(FoodItem.created_at.desc()).all()
+    return jsonify([item.to_dict() for item in items])
+
+
+@food_bp.route("/<int:item_id>", methods=["GET"])
+def get_item(item_id):
+    item = FoodItem.query.get_or_404(item_id)
+    data = item.to_dict()
+    data["shop"] = item.shop.to_dict() if item.shop else None
+    # include reviews for this item's shop
+    if item.shop:
+        data["reviews"] = [r.to_dict() for r in item.shop.reviews]
+    return jsonify(data)
+
+
+@food_bp.route("/", methods=["POST"])
+@jwt_required()
+def create_item():
+    user_id = int(get_jwt_identity())
+    user = User.query.get_or_404(user_id)
+
+    if user.role != "shop":
+        return jsonify({"error": "Only shop accounts can create food items"}), 403
+    if not user.shop:
+        return jsonify({"error": "Shop not found"}), 404
+
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "No data provided"}), 400
+
+    required = ["name", "original_price", "discounted_price"]
+    for field in required:
+        if field not in data:
+            return jsonify({"error": f"{field} is required"}), 400
+
+    item = FoodItem(
+        shop_id=user.shop.id,
+        name=data["name"],
+        description=data.get("description", ""),
+        original_price=float(data["original_price"]),
+        discounted_price=float(data["discounted_price"]),
+        quantity=int(data.get("quantity", 1)),
+        pickup_start=data.get("pickup_start", "17:00"),
+        pickup_end=data.get("pickup_end", "20:00"),
+        image_url=data.get("image_url", ""),
+        is_available=data.get("is_available", True),
+    )
+    db.session.add(item)
+    db.session.commit()
+    return jsonify(item.to_dict()), 201
+
+
+@food_bp.route("/<int:item_id>", methods=["PUT"])
+@jwt_required()
+def update_item(item_id):
+    user_id = int(get_jwt_identity())
+    item = FoodItem.query.get_or_404(item_id)
+
+    user = User.query.get_or_404(user_id)
+    if user.role != "shop" or not user.shop or user.shop.id != item.shop_id:
+        return jsonify({"error": "Unauthorized"}), 403
+
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "No data provided"}), 400
+
+    updatable = [
+        "name", "description", "original_price", "discounted_price",
+        "quantity", "pickup_start", "pickup_end", "image_url", "is_available"
+    ]
+    for field in updatable:
+        if field in data:
+            setattr(item, field, data[field])
+
+    db.session.commit()
+    return jsonify(item.to_dict())
+
+
+@food_bp.route("/<int:item_id>", methods=["DELETE"])
+@jwt_required()
+def delete_item(item_id):
+    user_id = int(get_jwt_identity())
+    item = FoodItem.query.get_or_404(item_id)
+
+    user = User.query.get_or_404(user_id)
+    if user.role != "shop" or not user.shop or user.shop.id != item.shop_id:
+        return jsonify({"error": "Unauthorized"}), 403
+
+    db.session.delete(item)
+    db.session.commit()
+    return jsonify({"message": "Item deleted successfully"})
