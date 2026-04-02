@@ -83,7 +83,7 @@ export default function AIAssistant() {
     <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8 h-[calc(100vh-4rem)] flex flex-col">
       {/* Header */}
       <div className="flex items-center gap-3 mb-4">
-        <div className="w-10 h-10 bg-gradient-to-br from-primary-500 to-primary-700 rounded-xl flex items-center justify-center flex-shrink-0">
+        <div className="w-10 h-10 bg-primary-700 rounded-xl flex items-center justify-center flex-shrink-0">
           <span className="text-white text-xl">✨</span>
         </div>
         <div>
@@ -93,7 +93,7 @@ export default function AIAssistant() {
           </p>
         </div>
         <div className="ml-auto flex items-center gap-1.5">
-          <div className="w-2 h-2 bg-primary-500 rounded-full animate-pulse" />
+          <div className="w-2 h-2 bg-primary-600 rounded-full animate-pulse" />
           <span className="text-xs text-gray-500">Online</span>
         </div>
       </div>
@@ -106,14 +106,14 @@ export default function AIAssistant() {
             className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
           >
             {msg.role === 'assistant' && (
-              <div className="w-7 h-7 bg-gradient-to-br from-primary-500 to-primary-700 rounded-full flex items-center justify-center flex-shrink-0 mr-2 mt-1">
+              <div className="w-7 h-7 bg-primary-700 rounded-full flex items-center justify-center flex-shrink-0 mr-2 mt-1">
                 <span className="text-white text-xs">✨</span>
               </div>
             )}
             <div
               className={`max-w-[80%] px-4 py-3 rounded-2xl text-sm leading-relaxed ${
                 msg.role === 'user'
-                  ? 'bg-primary-600 text-white rounded-tr-sm'
+                  ? 'bg-primary-700 text-white rounded-tr-sm'
                   : msg.isError
                   ? 'bg-red-50 text-red-700 border border-red-200 rounded-tl-sm'
                   : 'bg-white text-gray-800 shadow-sm border border-gray-100 rounded-tl-sm'
@@ -138,7 +138,7 @@ export default function AIAssistant() {
 
         {loading && (
           <div className="flex justify-start">
-            <div className="w-7 h-7 bg-gradient-to-br from-primary-500 to-primary-700 rounded-full flex items-center justify-center flex-shrink-0 mr-2 mt-1">
+            <div className="w-7 h-7 bg-primary-700 rounded-full flex items-center justify-center flex-shrink-0 mr-2 mt-1">
               <span className="text-white text-xs">✨</span>
             </div>
             <TypingIndicator />

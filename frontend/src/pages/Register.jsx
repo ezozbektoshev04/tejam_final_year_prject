@@ -50,6 +50,7 @@ export default function Register() {
       <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center py-12 px-4">
         <div className="w-full max-w-lg">
           <div className="text-center mb-8">
+            <img src="/logo-color.png" alt="Tejam" className="h-16 w-auto mx-auto mb-4" />
             <h1 className="text-2xl font-bold text-gray-900">Join Tejam</h1>
             <p className="text-gray-500 mt-1">How will you use Tejam?</p>
           </div>
@@ -78,17 +79,17 @@ export default function Register() {
 
             <button
               onClick={() => handleRoleSelect('shop')}
-              className="card p-6 text-left hover:shadow-md hover:border-accent-300 border-2 border-transparent transition-all group"
+              className="card p-6 text-left hover:shadow-md hover:border-primary-300 border-2 border-transparent transition-all group"
             >
               <div className="text-4xl mb-3">🏪</div>
-              <h2 className="text-lg font-bold text-gray-900 group-hover:text-accent-600">I own a shop</h2>
+              <h2 className="text-lg font-bold text-gray-900 group-hover:text-primary-700">I own a shop</h2>
               <p className="text-gray-500 text-sm mt-1">
                 List your surplus food and reach thousands of customers. Free to join.
               </p>
               <ul className="mt-3 space-y-1">
                 {['Reduce food waste', 'Earn more revenue', 'AI-powered pricing'].map(f => (
                   <li key={f} className="text-xs text-gray-500 flex items-center gap-1">
-                    <svg className="w-3.5 h-3.5 text-accent-500" fill="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-3.5 h-3.5 text-primary-600" fill="currentColor" viewBox="0 0 24 24">
                       <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                     {f}

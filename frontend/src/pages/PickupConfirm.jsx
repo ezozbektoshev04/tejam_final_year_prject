@@ -70,14 +70,12 @@ export default function PickupConfirm() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4 py-10">
+    <div className="min-h-screen bg-white flex items-center justify-center px-4 py-10">
       <div className="w-full max-w-sm">
 
         {/* Header */}
         <div className="text-center mb-6">
-          <div className="w-14 h-14 bg-primary-600 rounded-2xl flex items-center justify-center mx-auto mb-3">
-            <span className="text-white font-bold text-2xl">T</span>
-          </div>
+          <img src="/logo-color.png" alt="Tejam" className="h-16 w-auto mx-auto mb-3" />
           <h1 className="text-xl font-bold text-gray-900">Tejam Pickup</h1>
           <p className="text-sm text-gray-500 mt-0.5">Order verification</p>
         </div>

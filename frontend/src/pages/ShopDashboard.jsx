@@ -146,8 +146,8 @@ export default function ShopDashboard() {
             <AreaChart data={revenueData}>
               <defs>
                 <linearGradient id="revenueGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#16a34a" stopOpacity={0.2} />
-                  <stop offset="95%" stopColor="#16a34a" stopOpacity={0} />
+                  <stop offset="5%" stopColor="#1a7548" stopOpacity={0.25} />
+                  <stop offset="95%" stopColor="#1a7548" stopOpacity={0} />
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
@@ -157,7 +157,7 @@ export default function ShopDashboard() {
               <Area
                 type="monotone"
                 dataKey="revenue"
-                stroke="#16a34a"
+                stroke="#1a7548"
                 strokeWidth={2}
                 fill="url(#revenueGradient)"
               />

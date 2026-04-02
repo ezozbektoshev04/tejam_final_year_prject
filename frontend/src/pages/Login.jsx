@@ -39,29 +39,27 @@ export default function Login() {
       <div className="w-full max-w-md">
         {/* Header */}
         <div className="text-center mb-8">
-          <div className="w-14 h-14 bg-primary-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
-            <span className="text-white font-bold text-2xl">T</span>
-          </div>
+          <img src="/logo-color.png" alt="Tejam" className="h-14 w-auto mx-auto mb-5" />
           <h1 className="text-2xl font-bold text-gray-900">Welcome back</h1>
-          <p className="text-gray-500 mt-1">Sign in to your Tejam account</p>
+          <p className="text-gray-500 mt-1 text-sm">Sign in to your Tejam account</p>
         </div>
 
         <div className="card p-6">
           {/* Demo accounts */}
-          <div className="mb-5 p-3 bg-primary-50 rounded-lg">
-            <p className="text-xs font-medium text-primary-700 mb-2">Demo accounts:</p>
+          <div className="mb-5 p-3 bg-gray-50 border border-gray-100 rounded-lg">
+            <p className="text-xs font-medium text-gray-500 mb-2">Try a demo account:</p>
             <div className="flex gap-2">
               <button
                 onClick={() => fillDemo('customer')}
-                className="text-xs bg-white border border-primary-200 text-primary-700 px-3 py-1.5 rounded-md hover:bg-primary-50 transition-colors"
+                className="text-xs bg-white border border-gray-200 text-gray-700 px-3 py-1.5 rounded-md hover:bg-primary-50 hover:border-primary-200 hover:text-primary-700 transition-colors"
               >
-                👤 Customer demo
+                👤 Customer
               </button>
               <button
                 onClick={() => fillDemo('shop')}
-                className="text-xs bg-white border border-primary-200 text-primary-700 px-3 py-1.5 rounded-md hover:bg-primary-50 transition-colors"
+                className="text-xs bg-white border border-gray-200 text-gray-700 px-3 py-1.5 rounded-md hover:bg-primary-50 hover:border-primary-200 hover:text-primary-700 transition-colors"
               >
-                🏪 Shop demo
+                🏪 Shop owner
               </button>
             </div>
           </div>

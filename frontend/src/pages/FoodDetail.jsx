@@ -113,7 +113,7 @@ export default function FoodDetail() {
               <div className="w-full h-full flex items-center justify-center text-7xl">🍽️</div>
             )}
             <div className="absolute top-3 left-3">
-              <span className="badge bg-accent-600 text-white font-bold px-3 py-1 text-sm">
+              <span className="badge bg-primary-700 text-white font-bold px-3 py-1 text-sm">
                 -{discount}%
               </span>
             </div>
@@ -122,7 +122,7 @@ export default function FoodDetail() {
           {/* Shop info */}
           {item.shop && (
             <>
-              <div className="mt-4 p-4 bg-primary-50 rounded-xl flex items-start gap-3">
+              <div className="mt-4 p-4 bg-gray-50 border border-gray-100 rounded-xl flex items-start gap-3">
                 <div className="w-10 h-10 bg-primary-100 rounded-lg flex items-center justify-center flex-shrink-0">
                   <span className="text-lg">🏪</span>
                 </div>
@@ -157,7 +157,7 @@ export default function FoodDetail() {
             <span className="text-lg text-gray-400 line-through">
               {formatPrice(item.original_price)}
             </span>
-            <span className="badge bg-accent-100 text-accent-700 font-semibold">
+            <span className="badge bg-primary-100 text-primary-800 font-semibold">
               Save {formatPrice(item.original_price - item.discounted_price)}
             </span>
           </div>

@@ -194,7 +194,7 @@ export default function ShopListings() {
                     <div className="w-full h-full flex items-center justify-center text-4xl">🍽️</div>
                   )}
                   <div className="absolute top-2 left-2">
-                    <span className="badge bg-accent-600 text-white text-xs font-bold">-{discount}%</span>
+                    <span className="badge bg-primary-700 text-white text-xs font-bold">-{discount}%</span>
                   </div>
                   <div className="absolute top-2 right-2">
                     <button
@@ -294,7 +294,7 @@ export default function ShopListings() {
                   <div className="flex items-center justify-between mb-1">
                     <label className="text-sm font-medium text-gray-700">Discounted price *</label>
                     <button type="button" onClick={handleAIPrice} disabled={aiPriceLoading}
-                      className="text-xs text-accent-600 border border-accent-200 bg-accent-50 hover:bg-accent-100 px-1.5 py-0.5 rounded disabled:opacity-50">
+                      className="text-xs text-primary-700 border border-primary-200 bg-primary-50 hover:bg-primary-100 px-1.5 py-0.5 rounded disabled:opacity-50">
                       {aiPriceLoading ? '⏳' : '🤖'}
                     </button>
                   </div>

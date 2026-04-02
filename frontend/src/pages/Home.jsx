@@ -5,30 +5,42 @@ import FoodCard from '../components/FoodCard'
 import ShopCard from '../components/ShopCard'
 
 const STATS = [
-  { value: '50,000+', label: 'Meals saved' },
-  { value: '200+', label: 'Partner shops' },
-  { value: '4', label: 'Cities' },
-  { value: '60%', label: 'Average discount' },
+  { value: '12', label: 'Partner branches' },
+  { value: '14', label: 'Active listings' },
+  { value: 'Tashkent', label: 'Launch city' },
+  { value: 'up to 70%', label: 'Discount' },
 ]
 
 const HOW_IT_WORKS = [
   {
-    step: '1',
-    title: 'Browse deals',
-    description: 'Find discounted surplus food from bakeries, restaurants, and grocery stores near you.',
-    icon: '🔍',
+    step: '01',
+    title: 'Browse listings',
+    description: 'Find surplus food from local Tashkent brands — bakeries, restaurants, and grocery stores — available at a discount.',
+    icon: (
+      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+      </svg>
+    ),
   },
   {
-    step: '2',
+    step: '02',
     title: 'Place your order',
-    description: 'Order your favourite items at up to 70% off the original price.',
-    icon: '🛒',
+    description: 'Select your items, choose a quantity, and confirm your order in seconds. No upfront payment required.',
+    icon: (
+      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+      </svg>
+    ),
   },
   {
-    step: '3',
-    title: 'Pick up & enjoy',
-    description: 'Go to the shop during the pickup window, collect your food and enjoy!',
-    icon: '🎉',
+    step: '03',
+    title: 'Pick up in person',
+    description: 'Visit the branch during the pickup window. Show your QR code, pay cash on the spot, and collect your food.',
+    icon: (
+      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+      </svg>
+    ),
   },
 ]
 
@@ -47,54 +59,86 @@ export default function Home() {
     }).finally(() => setLoading(false))
   }, [])
 
+  const heroItems = featuredItems.slice(0, 4)
+
   return (
     <main>
       {/* Hero */}
-      <section className="relative bg-gradient-to-br from-primary-700 via-primary-600 to-primary-500 text-white overflow-hidden">
-        {/* Background pattern */}
-        <div className="absolute inset-0 opacity-10">
-          <div className="absolute top-8 left-10 text-8xl">🍽️</div>
-          <div className="absolute top-20 right-20 text-6xl">🥖</div>
-          <div className="absolute bottom-10 left-1/4 text-7xl">🧆</div>
-          <div className="absolute bottom-20 right-10 text-5xl">🌿</div>
-        </div>
+      <section className="bg-primary-50 pt-14 pb-16 overflow-hidden">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="grid lg:grid-cols-2 gap-10 items-center">
 
-        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 lg:py-28">
-          <div className="max-w-3xl">
-            <div className="flex items-center gap-2 mb-4">
-              <span className="badge bg-white/20 text-white text-sm px-3 py-1">
-                🇺🇿 Made for Uzbekistan
+            {/* Left: text */}
+            <div>
+              <span className="inline-flex items-center gap-1.5 bg-primary-50 text-primary-700 text-xs font-semibold px-3 py-1.5 rounded-full mb-5">
+                🇺🇿 Tashkent, Uzbekistan · Early access
               </span>
+              <h1 className="text-4xl sm:text-5xl font-extrabold text-gray-900 leading-tight tracking-tight">
+                Good food.<br />
+                <span className="text-primary-700">Less waste.</span><br />
+                Real savings.
+              </h1>
+              <p className="mt-5 text-base sm:text-lg text-gray-500 max-w-md leading-relaxed">
+                Tejam is a marketplace for surplus food from Tashkent's best restaurants and grocery brands — available at up to 70% off, ready for pickup today.
+              </p>
+              <div className="mt-8 flex flex-wrap gap-3">
+                <Link to="/browse" className="btn-primary py-3 px-6 text-sm">
+                  Browse available deals
+                </Link>
+                <Link to="/register" className="btn-secondary py-3 px-6 text-sm">
+                  Register your shop
+                </Link>
+              </div>
             </div>
-            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold leading-tight">
-              Save food.
-              <br />
-              <span className="text-accent-300">Save money.</span>
-              <br />
-              Save Uzbekistan.
-            </h1>
-            <p className="mt-6 text-xl text-primary-100 max-w-xl">
-              Tejam connects you with local shops in Tashkent selling surplus food at up to 70% off. Fresh samsa, non bread, plov — all at amazing prices.
-            </p>
-            <div className="mt-8 flex flex-wrap gap-4">
-              <Link to="/browse" className="bg-white text-primary-700 font-bold py-3 px-8 rounded-xl hover:bg-primary-50 transition-colors shadow-lg">
-                Browse deals now
-              </Link>
-              <Link to="/register" className="bg-accent-500 hover:bg-accent-600 text-white font-bold py-3 px-8 rounded-xl transition-colors shadow-lg">
-                List your shop →
-              </Link>
+
+            {/* Right: food image grid */}
+            <div className="grid grid-cols-2 gap-3">
+              {loading
+                ? [0, 1, 2, 3].map(i => (
+                    <div key={i} className={`bg-gray-100 rounded-2xl animate-pulse ${i === 0 ? 'h-52' : 'h-44'}`} />
+                  ))
+                : heroItems.length > 0
+                ? heroItems.map((item, i) => (
+                    <Link
+                      key={item.id}
+                      to={`/food/${item.id}`}
+                      className={`block rounded-2xl overflow-hidden bg-primary-50 relative group ${i === 0 ? 'h-52' : 'h-44'}`}
+                    >
+                      {item.image_url ? (
+                        <img
+                          src={item.image_url}
+                          alt={item.name}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                          onError={e => { e.target.style.display = 'none' }}
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-5xl">🍽️</div>
+                      )}
+                      <div className="absolute bottom-2 left-2">
+                        <span className="badge bg-primary-700 text-white text-xs font-bold">
+                          {Math.round(((item.original_price - item.discounted_price) / item.original_price) * 100)}% off
+                        </span>
+                      </div>
+                    </Link>
+                  ))
+                : [0, 1, 2, 3].map(i => (
+                    <div key={i} className={`bg-primary-50 rounded-2xl flex items-center justify-center text-5xl ${i === 0 ? 'h-52' : 'h-44'}`}>
+                      🍽️
+                    </div>
+                  ))
+              }
             </div>
           </div>
         </div>
       </section>
 
       {/* Stats */}
-      <section className="bg-white border-b border-gray-100">
+      <section className="border-y border-gray-100 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
             {STATS.map((s) => (
               <div key={s.label} className="text-center">
-                <div className="text-3xl font-extrabold text-primary-600">{s.value}</div>
+                <div className="text-2xl font-extrabold text-primary-800">{s.value}</div>
                 <div className="text-sm text-gray-500 mt-1">{s.label}</div>
               </div>
             ))}
@@ -103,36 +147,36 @@ export default function Home() {
       </section>
 
       {/* How it works */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-        <div className="text-center mb-12">
-          <h2 className="text-3xl font-bold text-gray-900">How Tejam works</h2>
-          <p className="text-gray-500 mt-2">Three simple steps to amazing food deals</p>
-        </div>
-        <div className="grid md:grid-cols-3 gap-8">
-          {HOW_IT_WORKS.map((step) => (
-            <div key={step.step} className="text-center p-6">
-              <div className="w-16 h-16 bg-primary-50 rounded-2xl flex items-center justify-center text-3xl mx-auto mb-4">
-                {step.icon}
+      <section className="bg-white py-16">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-12">
+            <h2 className="text-2xl font-bold text-gray-900">How it works</h2>
+            <p className="text-gray-500 mt-2 text-sm">From listing to pickup in three steps</p>
+          </div>
+          <div className="grid md:grid-cols-3 gap-6">
+            {HOW_IT_WORKS.map((step) => (
+              <div key={step.step} className="bg-gray-50 rounded-2xl p-6">
+                <div className="w-11 h-11 bg-primary-700 text-white rounded-xl flex items-center justify-center mb-4">
+                  {step.icon}
+                </div>
+                <p className="text-xs font-bold text-primary-600 uppercase tracking-widest mb-1">{step.step}</p>
+                <h3 className="font-semibold text-gray-900 mb-2">{step.title}</h3>
+                <p className="text-gray-500 text-sm leading-relaxed">{step.description}</p>
               </div>
-              <div className="inline-flex items-center justify-center w-7 h-7 bg-primary-600 text-white rounded-full text-sm font-bold mb-3">
-                {step.step}
-              </div>
-              <h3 className="font-semibold text-lg text-gray-900 mb-2">{step.title}</h3>
-              <p className="text-gray-500 text-sm leading-relaxed">{step.description}</p>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       </section>
 
-      {/* Featured Shops */}
-      <section className="bg-gray-50 py-16">
+      {/* Partner branches */}
+      <section className="bg-primary-50 py-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between mb-8">
             <div>
-              <h2 className="text-2xl font-bold text-gray-900">Featured shops</h2>
-              <p className="text-gray-500 text-sm mt-1">Top-rated sellers on Tejam</p>
+              <h2 className="text-2xl font-bold text-gray-900">Partner branches</h2>
+              <p className="text-gray-500 text-sm mt-1">Real Tashkent brands on the platform</p>
             </div>
-            <Link to="/browse" className="text-primary-600 text-sm font-medium hover:underline">
+            <Link to="/browse" className="text-sm font-semibold text-primary-700 hover:text-primary-900 transition-colors">
               View all →
             </Link>
           </div>
@@ -159,15 +203,15 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Featured Food Items */}
-      <section className="py-16">
+      {/* Available now */}
+      <section className="bg-white py-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between mb-8">
             <div>
-              <h2 className="text-2xl font-bold text-gray-900">Today's deals</h2>
-              <p className="text-gray-500 text-sm mt-1">Fresh surplus food available now</p>
+              <h2 className="text-2xl font-bold text-gray-900">Available now</h2>
+              <p className="text-gray-500 text-sm mt-1">Surplus food listed today across Tashkent</p>
             </div>
-            <Link to="/browse" className="text-primary-600 text-sm font-medium hover:underline">
+            <Link to="/browse" className="text-sm font-semibold text-primary-700 hover:text-primary-900 transition-colors">
               View all →
             </Link>
           </div>
@@ -196,37 +240,31 @@ export default function Home() {
       </section>
 
       {/* CTA Banner */}
-      <section className="bg-gradient-to-r from-accent-500 to-accent-600 text-white py-16">
+      <section className="bg-primary-50 border-y border-primary-100 py-16">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h2 className="text-3xl font-bold mb-4">Own a food business in Uzbekistan?</h2>
-          <p className="text-accent-100 text-lg mb-8 max-w-2xl mx-auto">
-            Join Tejam and turn your surplus food into sales. Reduce waste, earn more revenue, and reach thousands of hungry customers.
+          <p className="text-primary-600 text-xs font-bold uppercase tracking-widest mb-3">For businesses</p>
+          <h2 className="text-3xl font-bold text-gray-900 mb-4">Running a restaurant or grocery store?</h2>
+          <p className="text-gray-500 text-base mb-8 max-w-xl mx-auto leading-relaxed">
+            List your surplus inventory on Tejam. Recover revenue from food that would otherwise go unsold — and reach customers actively looking for deals in Tashkent.
           </p>
           <Link
             to="/register"
-            className="inline-block bg-white text-accent-600 font-bold py-3 px-8 rounded-xl hover:bg-accent-50 transition-colors shadow-lg"
+            className="inline-block btn-primary py-3 px-8 text-sm"
           >
-            Register your shop for free
+            Register your business — it's free
           </Link>
         </div>
       </section>
 
       {/* Footer */}
-      <footer className="bg-gray-900 text-gray-400 py-10">
+      <footer className="bg-primary-50 border-t border-primary-100 text-gray-500 py-10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-primary-600 rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold text-sm">T</span>
-              </div>
-              <span className="text-white font-bold text-lg">Tejam</span>
-            </div>
+            <img src="/logo-color.png" alt="Tejam" className="h-8 w-auto" />
             <p className="text-sm">
               © 2026 Tejam. Reducing food waste across Uzbekistan 🇺🇿
             </p>
-            <div className="flex gap-6 text-sm">
-              <span>Tashkent, Uzbekistan 🇺🇿</span>
-            </div>
+            <span className="text-sm">Tashkent, Uzbekistan 🇺🇿</span>
           </div>
         </div>
       </footer>
