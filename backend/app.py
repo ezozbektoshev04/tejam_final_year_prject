@@ -28,6 +28,7 @@ def create_app(config_class=Config):
     from routes.orders import orders_bp
     from routes.ai import ai_bp
     from routes.uploads import uploads_bp
+    from routes.admin import admin_bp
 
     app.register_blueprint(auth_bp, url_prefix="/api/auth")
     app.register_blueprint(shops_bp, url_prefix="/api/shops")
@@ -35,6 +36,7 @@ def create_app(config_class=Config):
     app.register_blueprint(orders_bp, url_prefix="/api/orders")
     app.register_blueprint(ai_bp, url_prefix="/api/ai")
     app.register_blueprint(uploads_bp, url_prefix="/uploads")
+    app.register_blueprint(admin_bp, url_prefix="/api/admin")
 
     # Create tables
     with app.app_context():
@@ -49,13 +51,20 @@ def seed_database(app):
     from models import User, Shop, FoodItem, Order, Review
     from flask_bcrypt import generate_password_hash
 
-    # Only seed if empty
-    if User.query.count() > 0:
+    # Ensure admin account always exists
+    password_hash = generate_password_hash("password123").decode("utf-8")
+    if not User.query.filter_by(email="admin@tejam.uz").first():
+        admin = User(email="admin@tejam.uz", password_hash=password_hash,
+                     role="admin", name="Tejam Admin", phone="+998900000000")
+        db.session.add(admin)
+        db.session.commit()
+        print("Admin user created.")
+
+    # Only seed rest if empty
+    if User.query.count() > 1:
         return
 
     print("Seeding database with Tashkent brand data...")
-
-    password_hash = generate_password_hash("password123").decode("utf-8")
 
     # --- Branch user accounts (one per physical branch) ---
     # Korzinka branches
@@ -94,6 +103,10 @@ def seed_database(app):
     cust2 = User(email="customer2@example.com", password_hash=password_hash,
                  role="customer", name="Jasur Mirzayev", phone="+998902222222")
 
+    # --- Admin account ---
+    admin = User(email="admin@tejam.uz", password_hash=password_hash,
+                 role="admin", name="Tejam Admin", phone="+998900000000")
+
     all_users = [
         u_korz1, u_korz2, u_korz3,
         u_havas1, u_havas2, u_havas3,
@@ -101,6 +114,7 @@ def seed_database(app):
         u_navat1, u_navat2,
         u_caravan1, u_caravan2,
         cust1, cust2,
+        admin,
     ]
     db.session.add_all(all_users)
     db.session.flush()

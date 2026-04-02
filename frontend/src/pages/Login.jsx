@@ -20,7 +20,8 @@ export default function Login() {
     setLoading(true)
     try {
       const user = await login(form.email, form.password)
-      if (user.role === 'shop') navigate('/dashboard')
+      if (user.role === 'admin') navigate('/admin')
+      else if (user.role === 'shop') navigate('/dashboard')
       else navigate(from)
     } catch (err) {
       setError(err.response?.data?.error || 'Login failed. Please try again.')

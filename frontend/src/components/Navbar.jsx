@@ -33,9 +33,10 @@ export default function Navbar() {
 
           {/* Desktop Nav */}
           <div className="hidden md:flex items-center gap-6">
-            <NavLink to="/" className={navLinkClass} end>Home</NavLink>
-            {user?.role !== 'shop' && <NavLink to="/browse" className={navLinkClass}>Browse</NavLink>}
-            {user && <NavLink to="/ai" className={navLinkClass}>AI Assistant</NavLink>}
+            {user?.role !== 'admin' && <NavLink to="/" className={navLinkClass} end>Home</NavLink>}
+            {user?.role === 'admin' && <NavLink to="/admin" className={navLinkClass}>Dashboard</NavLink>}
+            {user?.role !== 'shop' && user?.role !== 'admin' && <NavLink to="/browse" className={navLinkClass}>Browse</NavLink>}
+            {user && user?.role !== 'admin' && <NavLink to="/ai" className={navLinkClass}>AI Assistant</NavLink>}
             {user?.role === 'shop' && (
               <>
                 <NavLink to="/dashboard" className={navLinkClass}>Dashboard</NavLink>
@@ -120,15 +121,22 @@ export default function Navbar() {
       {mobileOpen && (
         <div className="md:hidden border-t border-gray-100 bg-white">
           <div className="px-4 py-3 space-y-1">
-            <NavLink to="/" className={navLinkClass} end onClick={() => setMobileOpen(false)}>
-              <div className="py-2">Home</div>
-            </NavLink>
-            {user?.role !== 'shop' && (
+            {user?.role !== 'admin' && (
+              <NavLink to="/" className={navLinkClass} end onClick={() => setMobileOpen(false)}>
+                <div className="py-2">Home</div>
+              </NavLink>
+            )}
+            {user?.role === 'admin' && (
+              <NavLink to="/admin" className={navLinkClass} onClick={() => setMobileOpen(false)}>
+                <div className="py-2">Dashboard</div>
+              </NavLink>
+            )}
+            {user?.role !== 'shop' && user?.role !== 'admin' && (
               <NavLink to="/browse" className={navLinkClass} onClick={() => setMobileOpen(false)}>
                 <div className="py-2">Browse</div>
               </NavLink>
             )}
-            {user && (
+            {user && user?.role !== 'admin' && (
               <NavLink to="/ai" className={navLinkClass} onClick={() => setMobileOpen(false)}>
                 <div className="py-2">AI Assistant</div>
               </NavLink>

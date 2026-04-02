@@ -27,8 +27,10 @@ api.interceptors.response.use(
       // Token expired or invalid
       localStorage.removeItem('access_token')
       localStorage.removeItem('user')
-      if (window.location.pathname !== '/login') {
-        window.location.href = '/login'
+      const isAdminPath = window.location.pathname.startsWith('/admin')
+      const redirectTo = isAdminPath ? '/admin/login' : '/login'
+      if (window.location.pathname !== redirectTo) {
+        window.location.href = redirectTo
       }
     }
     return Promise.reject(error)
