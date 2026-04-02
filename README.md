@@ -7,13 +7,14 @@ Tejam (тежам — "economical" in Uzbek) is a full-stack web application ins
 - **Customers** browse discounted food from real Tashkent brands: Korzinka, Havas, Safia, Navat, Caravan, and more
 - **Multiple branch locations** per brand with GPS-based "Near me" sorting — find the closest branch instantly
 - **Shop owners** list surplus food items, manage orders, and view revenue analytics
-- **QR code payment** — customer shows a QR code at pickup, shop scans and confirms cash payment on the spot
+- **QR code pickup** — customer shows a QR code at pickup, shop scans and confirms on the spot
 - **Google Maps integration** — directions to the pickup location built into every order
 - **Photo upload** for food listings — drag and drop or click to upload
-- **AI assistant** powered by Google Gemini 2.5 Flash: auto-generate food descriptions, suggest optimal discount prices, chat assistant
+- **AI assistant** powered by Google Gemini: auto-generate food descriptions, suggest optimal discount prices, chat assistant
 - **Real-time order management** with status tracking (pending → confirmed → picked up)
 - **Reviews system** for completed orders
-- **Recharts** dashboards with revenue graphs and top-item analytics
+- **Recharts dashboards** with revenue graphs and top-item analytics for shop owners
+- **Admin panel** — manage all customers and shop partners, view platform stats, toggle shop visibility
 
 ## Tech Stack
 
@@ -33,22 +34,26 @@ tejam/
 │   ├── models.py           # SQLAlchemy models
 │   ├── config.py           # Config class
 │   ├── routes/
-│   │   ├── auth.py         # Register / login
+│   │   ├── auth.py         # Register / login / me
 │   │   ├── shops.py        # Shop CRUD
 │   │   ├── food_items.py   # Food item CRUD
 │   │   ├── orders.py       # Orders + QR pickup endpoints
 │   │   ├── ai.py           # Gemini AI features
+│   │   ├── admin.py        # Admin panel endpoints
 │   │   └── uploads.py      # Image upload / serve
 │   ├── uploads/            # Uploaded food images
 │   ├── requirements.txt
 │   └── .env
 └── frontend/
+    ├── public/
+    │   ├── logo-color.png  # Brand logo (light backgrounds)
+    │   └── logo-white.png  # Brand logo (dark backgrounds)
     ├── src/
     │   ├── pages/          # All page components
-    │   ├── components/     # Reusable components (FoodCard, ShopCard, MapEmbed, ImageUpload…)
-    │   ├── context/        # AuthContext
+    │   ├── components/     # FoodCard, ShopCard, Navbar, ProtectedRoute…
+    │   ├── context/        # AuthContext (JWT + role state)
     │   ├── utils/          # distance.js (Haversine formula)
-    │   └── api/            # Axios instance
+    │   └── api/            # Axios instance with auth interceptors
     ├── package.json
     └── vite.config.js
 ```
@@ -82,12 +87,13 @@ echo "DATABASE_URL=sqlite:///tejam.db" >> .env
 python app.py
 ```
 
-The backend will start on **http://localhost:5000**
+The backend starts on **http://localhost:5000**
 
-On first run, the database is automatically created and seeded with real Tashkent brands:
+On first run, the database is automatically created and seeded:
 - **12 branch locations** across Tashkent (Korzinka ×3, Havas ×3, Safia ×2, Navat ×2, Caravan ×2)
 - **14 food items** spread across all branches
 - 2 customer accounts + sample orders and reviews
+- 1 admin account (always ensured on every startup)
 
 ### Frontend Setup
 
@@ -101,9 +107,14 @@ npm install
 npm run dev
 ```
 
-The frontend will start on **http://localhost:5173**
+The frontend starts on **http://localhost:5173** (or 5174 if 5173 is in use).
 
 ## Demo Accounts
+
+### Admin
+| Email | Password | Portal |
+|-------|----------|--------|
+| admin@tejam.uz | password123 | http://localhost:5173/admin/login |
 
 ### Customers
 | Email | Password |
@@ -190,11 +201,37 @@ VITE_GOOGLE_MAPS_API_KEY=...    # For embedded Maps in order detail
 | POST | `/suggest-price` | Suggest discount price (JWT, shop) |
 | POST | `/chat` | General AI assistant (JWT) |
 
+### Admin (`/api/admin`) — JWT required, admin role only
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/stats` | Platform overview stats |
+| GET | `/users?role=customer` | List all users (filterable by role) |
+| DELETE | `/users/:id` | Delete a user account |
+| GET | `/shops` | List all shops with owner info |
+| PUT | `/shops/:id/toggle` | Toggle shop active/inactive status |
+
 ### Uploads (`/uploads`)
 | Method | Path | Description |
 |--------|------|-------------|
 | POST | `/image` | Upload food image (JWT, shop) |
 | GET | `/:filename` | Serve uploaded image |
+
+## Routing & Access Control
+
+| Path | Access |
+|------|--------|
+| `/` | Public — landing page |
+| `/browse` | Public — browse all listings |
+| `/food/:id` | Public — food item detail |
+| `/login` | Public — customer/shop login |
+| `/register` | Public — customer/shop registration |
+| `/orders` | Customer only |
+| `/dashboard` | Shop only |
+| `/listings` | Shop only |
+| `/ai` | Any logged-in user |
+| `/pickup/:token` | Public — QR pickup confirmation |
+| `/admin/login` | Public — admin login portal |
+| `/admin` | Admin only |
 
 ## Running Both Servers
 
@@ -214,5 +251,5 @@ Then open http://localhost:5173 in your browser.
 
 ## Color Theme
 
-- Primary: `#16a34a` (green-600) — sustainability
-- Accent: `#ea580c` (orange-600) — energy and appetite
+- **Primary:** Dark forest green (`#1a7548`) — sustainability and freshness
+- **Accent:** Warm amber (`#f59e0b`) — energy and appetite
