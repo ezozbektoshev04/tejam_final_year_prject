@@ -13,6 +13,7 @@ import ShopDashboard from './pages/ShopDashboard'
 import ShopListings from './pages/ShopListings'
 import AIAssistant from './pages/AIAssistant'
 import PickupConfirm from './pages/PickupConfirm'
+import PaymentSuccess from './pages/PaymentSuccess'
 import AdminPanel from './pages/AdminPanel'
 import AdminLogin from './pages/AdminLogin'
 
@@ -31,6 +32,7 @@ function Layout() {
         <Route path="/browse" element={<Browse />} />
         <Route path="/food/:id" element={<FoodDetail />} />
         <Route path="/pickup/:token" element={<PickupConfirm />} />
+        <Route path="/payment/success" element={<PaymentSuccess />} />
 
         {/* Customer */}
         <Route path="/orders" element={

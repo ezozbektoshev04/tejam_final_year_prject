@@ -18,8 +18,14 @@ class Config:
 
     GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 
+    STRIPE_SECRET_KEY = os.environ.get("STRIPE_SECRET_KEY", "")
+    FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:5173")
+
     UPLOAD_FOLDER = os.path.join(BASE_DIR, "uploads")
     MAX_CONTENT_LENGTH = 5 * 1024 * 1024  # 5 MB
     ALLOWED_EXTENSIONS = {"jpg", "jpeg", "png", "webp"}
 
-    CORS_ORIGINS = ["http://localhost:5173", "http://127.0.0.1:5173"]
+    CORS_ORIGINS = [
+        "http://localhost:5173", "http://127.0.0.1:5173",
+        "http://localhost:5174", "http://127.0.0.1:5174",
+    ]

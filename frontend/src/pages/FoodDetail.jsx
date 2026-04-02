@@ -33,6 +33,7 @@ export default function FoodDetail() {
   const [loading, setLoading] = useState(true)
   const [quantity, setQuantity] = useState(1)
   const [notes, setNotes] = useState('')
+  const [paymentMethod, setPaymentMethod] = useState('online')
   const [ordering, setOrdering] = useState(false)
   const [orderSuccess, setOrderSuccess] = useState(false)
   const [orderError, setOrderError] = useState('')
@@ -57,16 +58,24 @@ export default function FoodDetail() {
     setOrdering(true)
     setOrderError('')
     try {
-      await api.post('/orders/', { food_item_id: parseInt(id), quantity, notes })
-      setOrderSuccess(true)
-      setItem(prev => ({
-        ...prev,
-        quantity: prev.quantity - quantity,
-        is_available: prev.quantity - quantity > 0,
-      }))
+      if (paymentMethod === 'online') {
+        const res = await api.post('/payments/create-checkout-session', {
+          food_item_id: parseInt(id),
+          quantity,
+          notes,
+        })
+        window.location.href = res.data.checkout_url
+      } else {
+        await api.post('/orders/', { food_item_id: parseInt(id), quantity, notes })
+        setOrderSuccess(true)
+        setItem(prev => ({
+          ...prev,
+          quantity: prev.quantity - quantity,
+          is_available: prev.quantity - quantity > 0,
+        }))
+      }
     } catch (err) {
       setOrderError(err.response?.data?.error || 'Failed to place order.')
-    } finally {
       setOrdering(false)
     }
   }
@@ -194,12 +203,16 @@ export default function FoodDetail() {
           <div className="mt-6 p-4 bg-white border border-gray-200 rounded-xl">
             {orderSuccess ? (
               <div className="text-center py-4">
-                <div className="text-4xl mb-2">🎉</div>
+                <div className="w-12 h-12 bg-primary-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                  <svg className="w-6 h-6 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
                 <h3 className="font-bold text-gray-900 text-lg">Order placed!</h3>
                 <p className="text-gray-500 text-sm mt-1">
-                  Head to {item.shop?.name} between {item.pickup_start} – {item.pickup_end} to pick up your food.
+                  Pay cash at {item.shop?.name} between {item.pickup_start} – {item.pickup_end}.
                 </p>
-                <Link to="/orders" className="btn-primary mt-4 inline-block text-sm">
+                <Link to="/orders" className="btn-primary mt-4 inline-block text-sm px-5 py-2">
                   View my orders
                 </Link>
               </div>
@@ -212,6 +225,51 @@ export default function FoodDetail() {
                     {orderError}
                   </div>
                 )}
+
+                {/* Payment method selector */}
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Payment method</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setPaymentMethod('online')}
+                      className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border-2 text-sm font-medium transition-colors ${
+                        paymentMethod === 'online'
+                          ? 'border-primary-600 bg-primary-50 text-primary-700'
+                          : 'border-gray-200 text-gray-500 hover:border-gray-300'
+                      }`}
+                    >
+                      <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M20 4H4a2 2 0 00-2 2v12a2 2 0 002 2h16a2 2 0 002-2V6a2 2 0 00-2-2zm0 14H4v-6h16v6zm0-10H4V6h16v2z"/>
+                      </svg>
+                      Pay online
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPaymentMethod('cash')}
+                      className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border-2 text-sm font-medium transition-colors ${
+                        paymentMethod === 'cash'
+                          ? 'border-primary-600 bg-primary-50 text-primary-700'
+                          : 'border-gray-200 text-gray-500 hover:border-gray-300'
+                      }`}
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+                      </svg>
+                      Cash in store
+                    </button>
+                  </div>
+                  {paymentMethod === 'online' && (
+                    <p className="text-xs text-gray-400 mt-1.5 text-center">
+                      Test card: <span className="font-mono">4242 4242 4242 4242</span> · any future date · any CVC
+                    </p>
+                  )}
+                  {paymentMethod === 'cash' && (
+                    <p className="text-xs text-gray-400 mt-1.5 text-center">
+                      Reserve now, pay cash when you pick up at the store
+                    </p>
+                  )}
+                </div>
 
                 <div className="mb-3">
                   <label className="block text-sm font-medium text-gray-700 mb-1">Quantity</label>
@@ -255,9 +313,17 @@ export default function FoodDetail() {
                 <button
                   type="submit"
                   disabled={!item.is_available || ordering}
-                  className="btn-primary w-full py-3"
+                  className="btn-primary w-full py-3 flex items-center justify-center gap-2"
                 >
-                  {ordering ? 'Placing order…' : !item.is_available ? 'Sold out' : 'Order now'}
+                  {ordering ? (
+                    <>
+                      <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                      </svg>
+                      {paymentMethod === 'online' ? 'Redirecting to payment…' : 'Placing order…'}
+                    </>
+                  ) : !item.is_available ? 'Sold out' : paymentMethod === 'online' ? 'Pay with Stripe' : 'Reserve & pay in store'}
                 </button>
 
                 {!user && (

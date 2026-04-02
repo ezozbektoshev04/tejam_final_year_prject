@@ -29,6 +29,7 @@ def create_app(config_class=Config):
     from routes.ai import ai_bp
     from routes.uploads import uploads_bp
     from routes.admin import admin_bp
+    from routes.payments import payments_bp
 
     app.register_blueprint(auth_bp, url_prefix="/api/auth")
     app.register_blueprint(shops_bp, url_prefix="/api/shops")
@@ -37,13 +38,29 @@ def create_app(config_class=Config):
     app.register_blueprint(ai_bp, url_prefix="/api/ai")
     app.register_blueprint(uploads_bp, url_prefix="/uploads")
     app.register_blueprint(admin_bp, url_prefix="/api/admin")
+    app.register_blueprint(payments_bp, url_prefix="/api/payments")
 
     # Create tables
     with app.app_context():
         db.create_all()
+        _migrate_db()
         seed_database(app)
 
     return app
+
+
+def _migrate_db():
+    """Add columns that may not exist in older DB files."""
+    from sqlalchemy import text
+    with db.engine.connect() as conn:
+        for stmt in [
+            "ALTER TABLE orders ADD COLUMN payment_method VARCHAR(10) DEFAULT 'cash'",
+        ]:
+            try:
+                conn.execute(text(stmt))
+                conn.commit()
+            except Exception:
+                pass  # Column already exists
 
 
 def seed_database(app):

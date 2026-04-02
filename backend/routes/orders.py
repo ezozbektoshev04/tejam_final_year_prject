@@ -61,6 +61,7 @@ def create_order():
         quantity=quantity,
         total_price=total_price,
         status="pending",
+        payment_method="cash",
         notes=data.get("notes", ""),
     )
 
@@ -108,14 +109,15 @@ def cancel_order(order_id):
     if order.customer_id != user_id:
         return jsonify({"error": "Unauthorized"}), 403
 
-    if order.status != "pending":
+    if order.status not in ("pending", "pending_payment"):
         return jsonify({"error": "Only pending orders can be cancelled"}), 400
 
-    # Restore quantity
-    item = FoodItem.query.get(order.food_item_id)
-    if item:
-        item.quantity += order.quantity
-        item.is_available = True
+    # Restore stock only if it was already decremented (pending, not pending_payment)
+    if order.status == "pending":
+        item = FoodItem.query.get(order.food_item_id)
+        if item:
+            item.quantity += order.quantity
+            item.is_available = True
 
     order.status = "cancelled"
     db.session.commit()

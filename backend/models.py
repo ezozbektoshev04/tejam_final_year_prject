@@ -115,7 +115,8 @@ class Order(db.Model):
     food_item_id = db.Column(db.Integer, db.ForeignKey("food_items.id"), nullable=False)
     quantity = db.Column(db.Integer, nullable=False, default=1)
     total_price = db.Column(db.Float, nullable=False)
-    status = db.Column(db.String(20), default="pending")  # pending|confirmed|picked_up|cancelled
+    status = db.Column(db.String(20), default="pending")  # pending_payment|pending|confirmed|picked_up|cancelled
+    payment_method = db.Column(db.String(10), default="cash")  # cash|online
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     notes = db.Column(db.Text)
     pickup_token = db.Column(db.String(36), unique=True, default=lambda: str(uuid.uuid4()))
@@ -139,6 +140,7 @@ class Order(db.Model):
             "quantity": self.quantity,
             "total_price": self.total_price,
             "status": self.status,
+            "payment_method": self.payment_method or "cash",
             "created_at": self.created_at.isoformat(),
             "notes": self.notes,
         }

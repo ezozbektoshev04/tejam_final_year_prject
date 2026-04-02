@@ -4,10 +4,11 @@ import { QRCodeSVG } from 'qrcode.react'
 import api from '../api/axios'
 
 const STATUS_CONFIG = {
-  pending:   { label: 'Pending',   color: 'bg-yellow-100 text-yellow-700',  icon: '⏳' },
-  confirmed: { label: 'Confirmed', color: 'bg-blue-100 text-blue-700',      icon: '✅' },
-  picked_up: { label: 'Picked up', color: 'bg-primary-100 text-primary-700', icon: '🎉' },
-  cancelled: { label: 'Cancelled', color: 'bg-red-100 text-red-700',        icon: '❌' },
+  pending_payment: { label: 'Awaiting payment', color: 'bg-amber-100 text-amber-700',    icon: '💳' },
+  pending:         { label: 'Pending',          color: 'bg-yellow-100 text-yellow-700',  icon: '⏳' },
+  confirmed:       { label: 'Confirmed',        color: 'bg-blue-100 text-blue-700',      icon: '✅' },
+  picked_up:       { label: 'Picked up',        color: 'bg-primary-100 text-primary-700', icon: '🎉' },
+  cancelled:       { label: 'Cancelled',        color: 'bg-red-100 text-red-700',        icon: '❌' },
 }
 
 function formatPrice(price) {
@@ -18,6 +19,7 @@ export default function Orders() {
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(true)
   const [cancelling, setCancelling] = useState(null)
+  const [retrying, setRetrying] = useState(null)
   const [expanded, setExpanded] = useState(null)
   const [qrOrder, setQrOrder] = useState(null)
   const [reviewModal, setReviewModal] = useState(null)
@@ -42,6 +44,17 @@ export default function Orders() {
       alert(err.response?.data?.error || 'Failed to cancel order')
     } finally {
       setCancelling(null)
+    }
+  }
+
+  const handleRetryPayment = async (orderId) => {
+    setRetrying(orderId)
+    try {
+      const res = await api.post(`/payments/retry/${orderId}`)
+      window.location.href = res.data.checkout_url
+    } catch (err) {
+      alert(err.response?.data?.error || 'Failed to start payment')
+      setRetrying(null)
     }
   }
 
@@ -83,7 +96,9 @@ export default function Orders() {
     <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900">My Orders</h1>
-        <p className="text-gray-500 text-sm mt-1">{orders.length} order{orders.length !== 1 ? 's' : ''} total</p>
+        <p className="text-gray-500 text-sm mt-1">
+          {orders.filter(o => o.status !== 'pending_payment' && o.status !== 'cancelled').length} active · {orders.length} total
+        </p>
       </div>
 
       {orders.length === 0 ? (
@@ -169,8 +184,16 @@ export default function Orders() {
                         <p className="font-medium">{order.quantity}</p>
                       </div>
                       <div>
-                        <span className="text-gray-500">Total paid</span>
+                        <span className="text-gray-500">Total</span>
                         <p className="font-medium text-primary-600">{formatPrice(order.total_price)}</p>
+                      </div>
+                      <div>
+                        <span className="text-gray-500">Payment</span>
+                        <p className="font-medium">
+                          {order.payment_method === 'online'
+                            ? (order.status === 'pending_payment' ? '💳 Unpaid' : '💳 Paid online')
+                            : '💵 Cash in store'}
+                        </p>
                       </div>
                       {order.notes && (
                         <div className="col-span-2">
@@ -201,6 +224,34 @@ export default function Orders() {
                     )}
 
                     <div className="mt-3 flex gap-2 flex-wrap">
+                      {/* Unpaid online order actions */}
+                      {order.status === 'pending_payment' && (
+                        <>
+                          <button
+                            onClick={() => handleRetryPayment(order.id)}
+                            disabled={retrying === order.id}
+                            className="text-sm text-white bg-primary-700 hover:bg-primary-800 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50 flex items-center gap-1.5"
+                          >
+                            {retrying === order.id ? (
+                              <>
+                                <svg className="animate-spin w-3.5 h-3.5" fill="none" viewBox="0 0 24 24">
+                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                                </svg>
+                                Redirecting…
+                              </>
+                            ) : '💳 Complete payment'}
+                          </button>
+                          <button
+                            onClick={() => handleCancel(order.id)}
+                            disabled={cancelling === order.id}
+                            className="text-sm text-red-600 border border-red-200 bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+                          >
+                            {cancelling === order.id ? 'Cancelling…' : 'Cancel'}
+                          </button>
+                        </>
+                      )}
+                      {/* Active order actions */}
                       {(order.status === 'pending' || order.status === 'confirmed') && (
                         <button
                           onClick={() => setQrOrder(order)}
@@ -265,7 +316,9 @@ export default function Orders() {
               Show this to the shop staff when you arrive.
             </p>
             <p className="text-xs font-semibold text-primary-600 mb-5">
-              Pay {new Intl.NumberFormat('uz-UZ').format(Math.round(qrOrder.total_price))} UZS on pickup
+              {qrOrder.payment_method === 'online'
+                ? '✓ Paid online — nothing to pay at the store'
+                : `Pay ${new Intl.NumberFormat('uz-UZ').format(Math.round(qrOrder.total_price))} UZS cash on pickup`}
             </p>
 
             <button
