@@ -30,6 +30,7 @@ def create_app(config_class=Config):
     from routes.uploads import uploads_bp
     from routes.admin import admin_bp
     from routes.payments import payments_bp
+    from routes.reports import reports_bp
 
     app.register_blueprint(auth_bp, url_prefix="/api/auth")
     app.register_blueprint(shops_bp, url_prefix="/api/shops")
@@ -39,6 +40,7 @@ def create_app(config_class=Config):
     app.register_blueprint(uploads_bp, url_prefix="/uploads")
     app.register_blueprint(admin_bp, url_prefix="/api/admin")
     app.register_blueprint(payments_bp, url_prefix="/api/payments")
+    app.register_blueprint(reports_bp, url_prefix="/api/reports")
 
     # Create tables
     with app.app_context():
