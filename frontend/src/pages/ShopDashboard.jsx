@@ -39,6 +39,14 @@ export default function ShopDashboard() {
   const [selectedShopId, setSelectedShopId] = useState(null) // null = all branches
   const [loading, setLoading] = useState(true)
   const [updatingOrder, setUpdatingOrder] = useState(null)
+  const [reportOpen, setReportOpen] = useState(false)
+  const [reportForm, setReportForm] = useState({
+    period: '7d',
+    start: '',
+    end: '',
+    granularity: 'daily',
+  })
+  const [reportLoading, setReportLoading] = useState(false)
 
   const fetchData = async (shopId = null) => {
     try {
@@ -76,6 +84,56 @@ export default function ShopDashboard() {
     }
   }
 
+  const handleDownloadReport = async () => {
+    const today = new Date()
+    const fmt = (d) => d.toISOString().slice(0, 10)
+
+    let start, end
+    if (reportForm.period === 'custom') {
+      if (!reportForm.start || !reportForm.end) {
+        alert('Please select a start and end date')
+        return
+      }
+      start = reportForm.start
+      end = reportForm.end
+    } else {
+      end = fmt(today)
+      const days = { '1d': 0, '7d': 6, '30d': 29, 'month': today.getDate() - 1 }
+      const startDate = new Date(today)
+      startDate.setDate(today.getDate() - (days[reportForm.period] ?? 6))
+      start = fmt(startDate)
+    }
+
+    const params = new URLSearchParams({ start, end, granularity: reportForm.granularity })
+    if (selectedShopId) params.set('shop_id', selectedShopId)
+
+    setReportLoading(true)
+    try {
+      const token = localStorage.getItem('access_token')
+      const res = await fetch(
+        `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/reports/export?${params}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      )
+      if (!res.ok) {
+        const err = await res.json()
+        alert(err.error || 'Export failed')
+        return
+      }
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `tejam-report-${start}-${end}.xlsx`
+      a.click()
+      URL.revokeObjectURL(url)
+      setReportOpen(false)
+    } catch {
+      alert('Export failed. Please try again.')
+    } finally {
+      setReportLoading(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="max-w-7xl mx-auto px-4 py-12">
@@ -108,9 +166,14 @@ export default function ShopDashboard() {
             {shops.length} branch{shops.length !== 1 ? 'es' : ''} · {shops[0]?.category}
           </p>
         </div>
-        <Link to="/listings" className="btn-primary text-sm">
-          + Manage listings
-        </Link>
+        <div className="flex gap-2">
+          <button onClick={() => setReportOpen(true)} className="btn-secondary text-sm">
+            ⬇ Download report
+          </button>
+          <Link to="/listings" className="btn-primary text-sm">
+            + Manage listings
+          </Link>
+        </div>
       </div>
 
       {/* Branch selector */}
@@ -294,6 +357,118 @@ export default function ShopDashboard() {
           </div>
         )}
       </div>
+
+      {/* Report modal */}
+      {reportOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-md">
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="text-lg font-bold text-gray-900">Download sales report</h2>
+              <button onClick={() => setReportOpen(false)} className="text-gray-400 hover:text-gray-600">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {/* Branch */}
+              {shops.length > 1 && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Branch</label>
+                  <select
+                    className="input-field"
+                    value={selectedShopId ?? ''}
+                    onChange={e => setSelectedShopId(e.target.value ? Number(e.target.value) : null)}
+                  >
+                    <option value="">All branches</option>
+                    {shops.map(s => (
+                      <option key={s.id} value={s.id}>
+                        {s.address?.split(',')[0] || `Branch ${s.id}`}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Period */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Period</label>
+                <select
+                  className="input-field"
+                  value={reportForm.period}
+                  onChange={e => setReportForm(f => ({ ...f, period: e.target.value }))}
+                >
+                  <option value="1d">Today</option>
+                  <option value="7d">Last 7 days</option>
+                  <option value="30d">Last 30 days</option>
+                  <option value="month">This month</option>
+                  <option value="custom">Custom range</option>
+                </select>
+              </div>
+
+              {/* Custom date range */}
+              {reportForm.period === 'custom' && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">From</label>
+                    <input
+                      type="date"
+                      className="input-field"
+                      value={reportForm.start}
+                      onChange={e => setReportForm(f => ({ ...f, start: e.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">To</label>
+                    <input
+                      type="date"
+                      className="input-field"
+                      value={reportForm.end}
+                      onChange={e => setReportForm(f => ({ ...f, end: e.target.value }))}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Granularity */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Breakdown by</label>
+                <div className="flex gap-2">
+                  {['hourly', 'daily', 'weekly'].map(g => (
+                    <button
+                      key={g}
+                      type="button"
+                      onClick={() => setReportForm(f => ({ ...f, granularity: g }))}
+                      className={`flex-1 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
+                        reportForm.granularity === g
+                          ? 'bg-primary-700 text-white border-primary-700'
+                          : 'bg-white text-gray-600 border-gray-200 hover:border-primary-300'
+                      }`}
+                    >
+                      {g.charAt(0).toUpperCase() + g.slice(1)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button type="button" onClick={() => setReportOpen(false)} className="btn-secondary flex-1">
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDownloadReport}
+                  disabled={reportLoading}
+                  className="btn-primary flex-1"
+                >
+                  {reportLoading ? 'Exporting…' : '⬇ Download Excel'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -260,7 +260,7 @@ export default function Home() {
       <footer className="bg-primary-50 border-t border-primary-100 text-gray-500 py-10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-            <img src="/logo-color.png" alt="Tejam" className="h-8 w-auto" />
+            <img src="/logo-color.png" alt="Tejam" className="h-12 w-auto" />
             <p className="text-sm">
               © 2026 Tejam. Reducing food waste across Uzbekistan 🇺🇿
             </p>

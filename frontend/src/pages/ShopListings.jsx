@@ -54,6 +54,7 @@ export default function ShopListings() {
 
   const openEdit = (item) => {
     setEditItem(item)
+    setSelectedShopId(item.shop_id)
     setForm({
       name: item.name,
       description: item.description || '',
@@ -297,6 +298,24 @@ export default function ShopListings() {
             )}
 
             <form onSubmit={handleSubmit} className="space-y-4">
+              {shops.length > 1 && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Branch *</label>
+                  <select
+                    value={selectedShopId || ''}
+                    onChange={e => setSelectedShopId(Number(e.target.value))}
+                    className="input-field"
+                    required
+                  >
+                    {shops.map(s => (
+                      <option key={s.id} value={s.id}>
+                        {s.address?.split(',')[0] || `Branch ${s.id}`}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Item name *</label>
                 <input type="text" name="name" value={form.name} onChange={handleChange}

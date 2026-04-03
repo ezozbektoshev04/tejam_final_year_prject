@@ -28,7 +28,7 @@ export default function Navbar() {
 
           {/* Logo */}
           <Link to="/" className="flex items-center">
-            <img src="/logo-color.png" alt="Tejam" className="h-10 w-auto" />
+            <img src="/logo-color.png" alt="Tejam" className="h-14 w-auto" />
           </Link>
 
           {/* Desktop Nav */}
