@@ -14,9 +14,13 @@ def list_orders():
 
     if user.role == "customer":
         orders = Order.query.filter_by(customer_id=user_id).order_by(Order.created_at.desc()).all()
-    elif user.role == "shop" and user.shop:
-        # Get orders for all food items belonging to this shop
-        food_ids = [item.id for item in user.shop.food_items]
+    elif user.role == "shop" and user.shops:
+        shop_ids = [s.id for s in user.shops]
+        food_ids = [
+            item.id
+            for s in user.shops
+            for item in s.food_items
+        ]
         orders = (
             Order.query.filter(Order.food_item_id.in_(food_ids))
             .order_by(Order.created_at.desc())
@@ -86,7 +90,8 @@ def update_status(order_id):
     if user.role != "shop":
         return jsonify({"error": "Only shop owners can update order status"}), 403
 
-    if not user.shop or order.food_item.shop_id != user.shop.id:
+    shop_ids = [s.id for s in user.shops]
+    if order.food_item.shop_id not in shop_ids:
         return jsonify({"error": "Unauthorized"}), 403
 
     data = request.get_json()
@@ -170,19 +175,30 @@ def shop_stats():
     user_id = int(get_jwt_identity())
     user = User.query.get_or_404(user_id)
 
-    if user.role != "shop" or not user.shop:
+    if user.role != "shop" or not user.shops:
         return jsonify({"error": "Shop account required"}), 403
 
-    shop = user.shop
-    food_ids = [item.id for item in shop.food_items]
+    # Optional: filter by a single branch
+    shop_id_filter = request.args.get("shop_id", type=int)
+    if shop_id_filter:
+        shop_ids = [s.id for s in user.shops]
+        if shop_id_filter not in shop_ids:
+            return jsonify({"error": "Unauthorized"}), 403
+        from models import Shop as ShopModel
+        target_shop = ShopModel.query.get_or_404(shop_id_filter)
+        food_ids = [item.id for item in target_shop.food_items]
+        avg_rating = target_shop.rating
+    else:
+        food_ids = [item.id for s in user.shops for item in s.food_items]
+        ratings = [s.rating for s in user.shops if s.rating]
+        avg_rating = sum(ratings) / len(ratings) if ratings else 0
 
     all_orders = Order.query.filter(Order.food_item_id.in_(food_ids)).all() if food_ids else []
     completed = [o for o in all_orders if o.status in ("confirmed", "picked_up")]
 
     total_revenue = sum(o.total_price for o in completed)
     total_orders = len(all_orders)
-    items_listed = len(shop.food_items)
-    avg_rating = shop.rating
+    items_listed = len(food_ids)
 
     # Revenue by day (last 7 days)
     today = datetime.utcnow().date()
@@ -244,7 +260,8 @@ def confirm_pickup(token):
 
     if user.role != "shop":
         return jsonify({"error": "Only shop accounts can confirm pickups"}), 403
-    if not user.shop or order.food_item.shop_id != user.shop.id:
+    shop_ids = [s.id for s in user.shops]
+    if order.food_item.shop_id not in shop_ids:
         return jsonify({"error": "This order does not belong to your shop"}), 403
     if order.status == "cancelled":
         return jsonify({"error": "Cannot confirm a cancelled order"}), 400

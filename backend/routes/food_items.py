@@ -45,7 +45,7 @@ def create_item():
 
     if user.role != "shop":
         return jsonify({"error": "Only shop accounts can create food items"}), 403
-    if not user.shop:
+    if not user.shops:
         return jsonify({"error": "Shop not found"}), 404
 
     data = request.get_json()
@@ -57,8 +57,13 @@ def create_item():
         if field not in data:
             return jsonify({"error": f"{field} is required"}), 400
 
+    shop_ids = [s.id for s in user.shops]
+    shop_id = int(data.get("shop_id", user.shops[0].id))
+    if shop_id not in shop_ids:
+        return jsonify({"error": "Unauthorized shop"}), 403
+
     item = FoodItem(
-        shop_id=user.shop.id,
+        shop_id=shop_id,
         name=data["name"],
         description=data.get("description", ""),
         original_price=float(data["original_price"]),
@@ -81,7 +86,8 @@ def update_item(item_id):
     item = FoodItem.query.get_or_404(item_id)
 
     user = User.query.get_or_404(user_id)
-    if user.role != "shop" or not user.shop or user.shop.id != item.shop_id:
+    shop_ids = [s.id for s in user.shops]
+    if user.role != "shop" or item.shop_id not in shop_ids:
         return jsonify({"error": "Unauthorized"}), 403
 
     data = request.get_json()
@@ -107,7 +113,8 @@ def delete_item(item_id):
     item = FoodItem.query.get_or_404(item_id)
 
     user = User.query.get_or_404(user_id)
-    if user.role != "shop" or not user.shop or user.shop.id != item.shop_id:
+    shop_ids = [s.id for s in user.shops]
+    if user.role != "shop" or item.shop_id not in shop_ids:
         return jsonify({"error": "Unauthorized"}), 403
 
     db.session.delete(item)

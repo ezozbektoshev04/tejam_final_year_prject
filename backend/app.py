@@ -83,36 +83,17 @@ def seed_database(app):
 
     print("Seeding database with Tashkent brand data...")
 
-    # --- Branch user accounts (one per physical branch) ---
-    # Korzinka branches
-    u_korz1 = User(email="korzinka.amir@tejam.uz", password_hash=password_hash,
-                   role="shop", name="Korzinka Amir Temur", phone="+998781230011")
-    u_korz2 = User(email="korzinka.chilonzor@tejam.uz", password_hash=password_hash,
-                   role="shop", name="Korzinka Chilonzor", phone="+998781230012")
-    u_korz3 = User(email="korzinka.yunusobod@tejam.uz", password_hash=password_hash,
-                   role="shop", name="Korzinka Yunusobod", phone="+998781230013")
-    # Havas branches
-    u_havas1 = User(email="havas.mustaqillik@tejam.uz", password_hash=password_hash,
-                    role="shop", name="Havas Mustaqillik", phone="+998781230021")
-    u_havas2 = User(email="havas.shayxontohur@tejam.uz", password_hash=password_hash,
-                    role="shop", name="Havas Shayxontohur", phone="+998781230022")
-    u_havas3 = User(email="havas.mirzo@tejam.uz", password_hash=password_hash,
-                    role="shop", name="Havas Mirzo Ulug'bek", phone="+998781230023")
-    # Safia branches
-    u_safia1 = User(email="safia.chilonzor@tejam.uz", password_hash=password_hash,
-                    role="shop", name="Safia Chilonzor", phone="+998781230031")
-    u_safia2 = User(email="safia.yakkasaroy@tejam.uz", password_hash=password_hash,
-                    role="shop", name="Safia Yakkasaroy", phone="+998781230032")
-    # Navat branches
-    u_navat1 = User(email="navat.ipak@tejam.uz", password_hash=password_hash,
-                    role="shop", name="Navat Buyuk Ipak Yo'li", phone="+998781230041")
-    u_navat2 = User(email="navat.uchtepa@tejam.uz", password_hash=password_hash,
-                    role="shop", name="Navat Uchtepa", phone="+998781230042")
-    # Caravan branches
-    u_caravan1 = User(email="caravan.navoiy@tejam.uz", password_hash=password_hash,
-                      role="shop", name="Caravan Navoiy", phone="+998781230051")
-    u_caravan2 = User(email="caravan.sergeli@tejam.uz", password_hash=password_hash,
-                      role="shop", name="Caravan Sergeli", phone="+998781230052")
+    # --- One account per company (owns all its branches) ---
+    u_korzinka = User(email="korzinka@tejam.uz", password_hash=password_hash,
+                      role="shop", name="Korzinka", phone="+998781230010")
+    u_havas    = User(email="havas@tejam.uz", password_hash=password_hash,
+                      role="shop", name="Havas", phone="+998781230020")
+    u_safia    = User(email="safia@tejam.uz", password_hash=password_hash,
+                      role="shop", name="Safia", phone="+998781230030")
+    u_navat    = User(email="navat@tejam.uz", password_hash=password_hash,
+                      role="shop", name="Navat", phone="+998781230040")
+    u_caravan  = User(email="caravan@tejam.uz", password_hash=password_hash,
+                      role="shop", name="Caravan", phone="+998781230050")
 
     # --- Customer accounts ---
     cust1 = User(email="customer1@example.com", password_hash=password_hash,
@@ -120,105 +101,93 @@ def seed_database(app):
     cust2 = User(email="customer2@example.com", password_hash=password_hash,
                  role="customer", name="Jasur Mirzayev", phone="+998902222222")
 
-    # --- Admin account ---
-    admin = User(email="admin@tejam.uz", password_hash=password_hash,
-                 role="admin", name="Tejam Admin", phone="+998900000000")
-
-    all_users = [
-        u_korz1, u_korz2, u_korz3,
-        u_havas1, u_havas2, u_havas3,
-        u_safia1, u_safia2,
-        u_navat1, u_navat2,
-        u_caravan1, u_caravan2,
-        cust1, cust2,
-        admin,
-    ]
+    all_users = [u_korzinka, u_havas, u_safia, u_navat, u_caravan, cust1, cust2]
     db.session.add_all(all_users)
     db.session.flush()
 
-    # --- Shops (one per branch with real Tashkent lat/lng) ---
+    # --- Shops (branches) — multiple shops per company user ---
     KORZINKA_DESC = "Uzbekistan's leading supermarket chain. Fresh in-store bakery, ready meals, produce, and groceries — all at affordable prices every day."
-    HAVAS_DESC = "Tashkent's beloved café and bakery chain. Fresh pastries, cakes, sandwiches, and premium coffee — a cozy spot for breakfast and lunch."
-    SAFIA_DESC = "Premium Uzbek confectionery and bakery. Traditional sweets, cakes, and holiday desserts made with natural ingredients since 1998."
-    NAVAT_DESC = "Traditional Uzbek national dishes restaurant chain. Authentic plov, manti, shurpa, and samsa — classic recipes passed down through generations."
-    CARAVAN_DESC = "Popular fast food and snack chain in Tashkent. Burgers, hot dogs, samsa, and fresh juices at accessible prices across the city."
+    HAVAS_DESC    = "Tashkent's beloved café and bakery chain. Fresh pastries, cakes, sandwiches, and premium coffee — a cozy spot for breakfast and lunch."
+    SAFIA_DESC    = "Premium Uzbek confectionery and bakery. Traditional sweets, cakes, and holiday desserts made with natural ingredients since 1998."
+    NAVAT_DESC    = "Traditional Uzbek national dishes restaurant chain. Authentic plov, manti, shurpa, and samsa — classic recipes passed down through generations."
+    CARAVAN_DESC  = "Popular fast food and snack chain in Tashkent. Burgers, hot dogs, samsa, and fresh juices at accessible prices across the city."
 
-    # Korzinka — 3 branches
-    shop_korz1 = Shop(user_id=u_korz1.id, name="Korzinka",
+    # Korzinka — 3 branches (all owned by u_korzinka)
+    shop_korz1 = Shop(user_id=u_korzinka.id, name="Korzinka",
         description=KORZINKA_DESC,
         address="Amir Temur shoh ko'chasi 1, Mirzo Ulug'bek tumani",
         city="Tashkent", category="Grocery",
         image_url="https://images.unsplash.com/photo-1542838132-92c53300491e?w=400",
         rating=4.7, is_active=True, lat=41.3105, lng=69.3247)
-    shop_korz2 = Shop(user_id=u_korz2.id, name="Korzinka",
+    shop_korz2 = Shop(user_id=u_korzinka.id, name="Korzinka",
         description=KORZINKA_DESC,
         address="Qatortol ko'chasi 56, Chilonzor tumani",
         city="Tashkent", category="Grocery",
         image_url="https://images.unsplash.com/photo-1542838132-92c53300491e?w=400",
         rating=4.6, is_active=True, lat=41.2934, lng=69.2082)
-    shop_korz3 = Shop(user_id=u_korz3.id, name="Korzinka",
+    shop_korz3 = Shop(user_id=u_korzinka.id, name="Korzinka",
         description=KORZINKA_DESC,
         address="Yunusobod ko'chasi 12, Yunusobod tumani",
         city="Tashkent", category="Grocery",
         image_url="https://images.unsplash.com/photo-1542838132-92c53300491e?w=400",
         rating=4.8, is_active=True, lat=41.3552, lng=69.2858)
 
-    # Havas — 3 branches
-    shop_havas1 = Shop(user_id=u_havas1.id, name="Havas",
+    # Havas — 3 branches (all owned by u_havas)
+    shop_havas1 = Shop(user_id=u_havas.id, name="Havas",
         description=HAVAS_DESC,
         address="Mustaqillik maydoni 6, Yunusobod tumani",
         city="Tashkent", category="Cafe",
         image_url="https://images.unsplash.com/photo-1509440159596-0249088772ff?w=400",
         rating=4.9, is_active=True, lat=41.2993, lng=69.2401)
-    shop_havas2 = Shop(user_id=u_havas2.id, name="Havas",
+    shop_havas2 = Shop(user_id=u_havas.id, name="Havas",
         description=HAVAS_DESC,
         address="Shayxontohur ko'chasi 33, Shayxontohur tumani",
         city="Tashkent", category="Cafe",
         image_url="https://images.unsplash.com/photo-1509440159596-0249088772ff?w=400",
         rating=4.7, is_active=True, lat=41.3163, lng=69.2556)
-    shop_havas3 = Shop(user_id=u_havas3.id, name="Havas",
+    shop_havas3 = Shop(user_id=u_havas.id, name="Havas",
         description=HAVAS_DESC,
         address="Mirzo Ulug'bek ko'chasi 77, Mirzo Ulug'bek tumani",
         city="Tashkent", category="Cafe",
         image_url="https://images.unsplash.com/photo-1509440159596-0249088772ff?w=400",
         rating=4.8, is_active=True, lat=41.3200, lng=69.3150)
 
-    # Safia — 2 branches
-    shop_safia1 = Shop(user_id=u_safia1.id, name="Safia",
+    # Safia — 2 branches (all owned by u_safia)
+    shop_safia1 = Shop(user_id=u_safia.id, name="Safia",
         description=SAFIA_DESC,
         address="Chilonzor ko'chasi 14, Chilonzor tumani",
         city="Tashkent", category="Sweets",
         image_url="https://images.unsplash.com/photo-1551024601-bec78aea704b?w=400",
         rating=4.9, is_active=True, lat=41.2950, lng=69.2100)
-    shop_safia2 = Shop(user_id=u_safia2.id, name="Safia",
+    shop_safia2 = Shop(user_id=u_safia.id, name="Safia",
         description=SAFIA_DESC,
         address="Amir Temur ko'chasi 105, Yakkasaroy tumani",
         city="Tashkent", category="Sweets",
         image_url="https://images.unsplash.com/photo-1551024601-bec78aea704b?w=400",
         rating=4.8, is_active=True, lat=41.2860, lng=69.2670)
 
-    # Navat — 2 branches
-    shop_navat1 = Shop(user_id=u_navat1.id, name="Navat",
+    # Navat — 2 branches (all owned by u_navat)
+    shop_navat1 = Shop(user_id=u_navat.id, name="Navat",
         description=NAVAT_DESC,
         address="Buyuk Ipak Yo'li ko'chasi 78, Shayxontohur tumani",
         city="Tashkent", category="Restaurant",
         image_url="https://images.unsplash.com/photo-1512058564366-18510be2db19?w=400",
         rating=4.8, is_active=True, lat=41.3163, lng=69.2556)
-    shop_navat2 = Shop(user_id=u_navat2.id, name="Navat",
+    shop_navat2 = Shop(user_id=u_navat.id, name="Navat",
         description=NAVAT_DESC,
         address="Uchtepa ko'chasi 22, Uchtepa tumani",
         city="Tashkent", category="Restaurant",
         image_url="https://images.unsplash.com/photo-1512058564366-18510be2db19?w=400",
         rating=4.7, is_active=True, lat=41.3080, lng=69.2030)
 
-    # Caravan — 2 branches
-    shop_caravan1 = Shop(user_id=u_caravan1.id, name="Caravan",
+    # Caravan — 2 branches (all owned by u_caravan)
+    shop_caravan1 = Shop(user_id=u_caravan.id, name="Caravan",
         description=CARAVAN_DESC,
         address="Navoiy ko'chasi 30, Mirzo Ulug'bek tumani",
         city="Tashkent", category="Fast Food",
         image_url="https://images.unsplash.com/photo-1565299585323-38d6b0865b47?w=400",
         rating=4.5, is_active=True, lat=41.3200, lng=69.2800)
-    shop_caravan2 = Shop(user_id=u_caravan2.id, name="Caravan",
+    shop_caravan2 = Shop(user_id=u_caravan.id, name="Caravan",
         description=CARAVAN_DESC,
         address="Sergeli ko'chasi 5, Sergeli tumani",
         city="Tashkent", category="Fast Food",

@@ -36,9 +36,9 @@ def my_shop():
     user = User.query.get_or_404(user_id)
     if user.role != "shop":
         return jsonify({"error": "Not a shop account"}), 403
-    if not user.shop:
-        return jsonify({"error": "Shop not found"}), 404
-    return jsonify(user.shop.to_dict(include_items=True))
+    if not user.shops:
+        return jsonify({"error": "No shops found"}), 404
+    return jsonify([s.to_dict(include_items=True) for s in user.shops])
 
 
 @shops_bp.route("/<int:shop_id>", methods=["GET"])

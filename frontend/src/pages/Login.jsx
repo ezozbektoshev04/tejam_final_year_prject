@@ -31,7 +31,7 @@ export default function Login() {
   }
 
   const fillDemo = (role) => {
-    if (role === 'shop') setForm({ email: 'toshkent.non@example.com', password: 'password123' })
+    if (role === 'shop') setForm({ email: 'korzinka@tejam.uz', password: 'password123' })
     else setForm({ email: 'customer1@example.com', password: 'password123' })
   }
 

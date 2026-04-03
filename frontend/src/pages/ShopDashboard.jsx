@@ -35,20 +35,26 @@ function StatCard({ title, value, sub, icon, color }) {
 export default function ShopDashboard() {
   const [stats, setStats] = useState(null)
   const [orders, setOrders] = useState([])
-  const [shop, setShop] = useState(null)
+  const [shops, setShops] = useState([])
+  const [selectedShopId, setSelectedShopId] = useState(null) // null = all branches
   const [loading, setLoading] = useState(true)
   const [updatingOrder, setUpdatingOrder] = useState(null)
 
-  const fetchData = async () => {
+  const fetchData = async (shopId = null) => {
     try {
-      const [statsRes, ordersRes, shopRes] = await Promise.all([
-        api.get('/orders/stats'),
+      const statsUrl = shopId ? `/orders/stats?shop_id=${shopId}` : '/orders/stats'
+      const [statsRes, ordersRes, shopsRes] = await Promise.all([
+        api.get(statsUrl),
         api.get('/orders/'),
         api.get('/shops/my'),
       ])
       setStats(statsRes.data)
-      setOrders(ordersRes.data.slice(0, 10))
-      setShop(shopRes.data)
+      const allOrders = ordersRes.data
+      setOrders(shopId
+        ? allOrders.filter(o => o.shop_id === shopId).slice(0, 10)
+        : allOrders.slice(0, 10)
+      )
+      setShops(shopsRes.data)
     } catch (err) {
       console.error(err)
     } finally {
@@ -56,7 +62,7 @@ export default function ShopDashboard() {
     }
   }
 
-  useEffect(() => { fetchData() }, [])
+  useEffect(() => { fetchData(selectedShopId) }, [selectedShopId])
 
   const handleStatusUpdate = async (orderId, newStatus) => {
     setUpdatingOrder(orderId)
@@ -93,19 +99,48 @@ export default function ShopDashboard() {
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">
-            {shop?.name || 'Shop Dashboard'}
+            {shops[0]?.name || 'Shop Dashboard'}
           </h1>
           <p className="text-gray-500 text-sm mt-0.5">
-            {shop?.city} · {shop?.category}
+            {shops.length} branch{shops.length !== 1 ? 'es' : ''} · {shops[0]?.category}
           </p>
         </div>
         <Link to="/listings" className="btn-primary text-sm">
           + Manage listings
         </Link>
       </div>
+
+      {/* Branch selector */}
+      {shops.length > 1 && (
+        <div className="flex gap-2 flex-wrap mb-6">
+          <button
+            onClick={() => setSelectedShopId(null)}
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
+              selectedShopId === null
+                ? 'bg-primary-700 text-white border-primary-700'
+                : 'bg-white text-gray-600 border-gray-200 hover:border-primary-300'
+            }`}
+          >
+            All branches
+          </button>
+          {shops.map(s => (
+            <button
+              key={s.id}
+              onClick={() => setSelectedShopId(s.id)}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
+                selectedShopId === s.id
+                  ? 'bg-primary-700 text-white border-primary-700'
+                  : 'bg-white text-gray-600 border-gray-200 hover:border-primary-300'
+              }`}
+            >
+              {s.address?.split(',')[0] || `Branch ${s.id}`}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Stats Grid */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">

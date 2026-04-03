@@ -78,6 +78,6 @@ def me():
     user_id = int(get_jwt_identity())
     user = User.query.get_or_404(user_id)
     data = user.to_dict()
-    if user.role == "shop" and user.shop:
-        data["shop"] = user.shop.to_dict()
+    if user.role == "shop":
+        data["shops"] = [s.to_dict() for s in user.shops]
     return jsonify(data)

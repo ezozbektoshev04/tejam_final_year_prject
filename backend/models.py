@@ -16,7 +16,7 @@ class User(db.Model):
     phone = db.Column(db.String(30))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
-    shop = db.relationship("Shop", backref="owner", uselist=False, lazy=True)
+    shops = db.relationship("Shop", backref="owner", uselist=True, lazy=True)
     orders = db.relationship("Order", backref="customer", lazy=True, foreign_keys="Order.customer_id")
     reviews = db.relationship("Review", backref="reviewer", lazy=True, foreign_keys="Review.customer_id")
 

@@ -64,11 +64,12 @@ def list_users():
         data = u.to_dict()
         if u.role == "customer":
             data["order_count"] = Order.query.filter_by(customer_id=u.id).count()
-        if u.role == "shop" and u.shop:
-            data["shop"] = u.shop.to_dict()
-            data["listing_count"] = FoodItem.query.filter_by(shop_id=u.shop.id).count()
+        if u.role == "shop" and u.shops:
+            shop_ids = [s.id for s in u.shops]
+            data["shops"] = [s.to_dict() for s in u.shops]
+            data["listing_count"] = FoodItem.query.filter(FoodItem.shop_id.in_(shop_ids)).count()
             data["order_count"] = Order.query.join(FoodItem).filter(
-                FoodItem.shop_id == u.shop.id
+                FoodItem.shop_id.in_(shop_ids)
             ).count()
         result.append(data)
 

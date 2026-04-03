@@ -13,6 +13,8 @@ const EMPTY_FORM = {
 }
 
 export default function ShopListings() {
+  const [shops, setShops] = useState([])
+  const [selectedShopId, setSelectedShopId] = useState(null) // set after shops load
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [modalOpen, setModalOpen] = useState(false)
@@ -24,14 +26,24 @@ export default function ShopListings() {
   const [aiPriceLoading, setAiPriceLoading] = useState(false)
   const [error, setError] = useState('')
 
-  const fetchItems = () => {
-    api.get('/shops/my')
-      .then(res => setItems(res.data.food_items || []))
-      .catch(console.error)
-      .finally(() => setLoading(false))
+  const fetchShopsAndItems = async () => {
+    try {
+      const res = await api.get('/shops/my')
+      const shopList = res.data
+      setShops(shopList)
+      const firstId = shopList[0]?.id || null
+      setSelectedShopId(firstId)
+      // Gather all items from all branches
+      const allItems = shopList.flatMap(s => s.food_items || [])
+      setItems(allItems)
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setLoading(false)
+    }
   }
 
-  useEffect(() => { fetchItems() }, [])
+  useEffect(() => { fetchShopsAndItems() }, [])
 
   const openCreate = () => {
     setEditItem(null)
@@ -112,6 +124,7 @@ export default function ShopListings() {
         original_price: parseFloat(form.original_price),
         discounted_price: parseFloat(form.discounted_price),
         quantity: parseInt(form.quantity),
+        shop_id: selectedShopId,
       }
       if (editItem) {
         await api.put(`/food-items/${editItem.id}`, payload)
@@ -119,7 +132,7 @@ export default function ShopListings() {
         await api.post('/food-items/', payload)
       }
       setModalOpen(false)
-      fetchItems()
+      fetchShopsAndItems()
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to save item')
     } finally {
@@ -150,15 +163,34 @@ export default function ShopListings() {
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">My listings</h1>
-          <p className="text-gray-500 text-sm mt-0.5">{items.length} item{items.length !== 1 ? 's' : ''}</p>
+          <h1 className="text-2xl font-bold text-gray-900">Listings</h1>
+          <p className="text-gray-500 text-sm mt-0.5">{items.length} item{items.length !== 1 ? 's' : ''} across all branches</p>
         </div>
         <button onClick={openCreate} className="btn-primary">
           + Add listing
         </button>
       </div>
+
+      {/* Branch selector */}
+      {shops.length > 1 && (
+        <div className="flex gap-2 flex-wrap mb-6">
+          {shops.map(s => (
+            <button
+              key={s.id}
+              onClick={() => setSelectedShopId(s.id)}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
+                selectedShopId === s.id
+                  ? 'bg-primary-700 text-white border-primary-700'
+                  : 'bg-white text-gray-600 border-gray-200 hover:border-primary-300'
+              }`}
+            >
+              {s.address?.split(',')[0] || `Branch ${s.id}`}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Items Grid */}
       {loading ? (
@@ -182,7 +214,7 @@ export default function ShopListings() {
         </div>
       ) : (
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {items.map(item => {
+          {items.filter(i => i.shop_id === selectedShopId).map(item => {
             const discount = Math.round(((item.original_price - item.discounted_price) / item.original_price) * 100)
             return (
               <div key={item.id} className={`card transition-opacity ${!item.is_available ? 'opacity-60' : ''}`}>
@@ -243,7 +275,7 @@ export default function ShopListings() {
         </div>
       )}
 
-      {/* Modal */}
+      {/* Modal - add listing / edit listing */}
       {modalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
