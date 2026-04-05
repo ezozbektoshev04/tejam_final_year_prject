@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import NotificationBell from './NotificationBell'
 
 export default function Navbar() {
   const { user, logout } = useAuth()
@@ -40,6 +41,7 @@ export default function Navbar() {
             {user?.role === 'shop' && (
               <>
                 <NavLink to="/dashboard" className={navLinkClass}>Dashboard</NavLink>
+                <NavLink to="/shop-orders" className={navLinkClass}>Orders</NavLink>
                 <NavLink to="/listings" className={navLinkClass}>Listings</NavLink>
               </>
             )}
@@ -50,6 +52,7 @@ export default function Navbar() {
 
           {/* Auth */}
           <div className="hidden md:flex items-center gap-3">
+            {user && user.role !== 'admin' && <NotificationBell />}
             {user ? (
               <div className="relative">
                 <button
@@ -145,6 +148,9 @@ export default function Navbar() {
               <>
                 <NavLink to="/dashboard" className={navLinkClass} onClick={() => setMobileOpen(false)}>
                   <div className="py-2">Dashboard</div>
+                </NavLink>
+                <NavLink to="/shop-orders" className={navLinkClass} onClick={() => setMobileOpen(false)}>
+                  <div className="py-2">Orders</div>
                 </NavLink>
                 <NavLink to="/listings" className={navLinkClass} onClick={() => setMobileOpen(false)}>
                   <div className="py-2">Listings</div>

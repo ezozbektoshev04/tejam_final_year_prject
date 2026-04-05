@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
 import api from '../api/axios'
+import ReactMarkdown from 'react-markdown'
 
 const CUSTOMER_SUGGESTIONS = [
   'What food is available in Tashkent today?',
@@ -13,7 +14,7 @@ const SHOP_SUGGESTIONS = [
   'How should I price my surplus samsa?',
   'Tips for reducing food waste in my bakery',
   'What discount percentage attracts most customers?',
-  'Best times to list surplus food in Uzbekistan',
+  'What are my pending orders?',
 ]
 
 function TypingIndicator() {
@@ -26,18 +27,35 @@ function TypingIndicator() {
   )
 }
 
+function MessageContent({ content }) {
+  return (
+    <ReactMarkdown
+      components={{
+        p: ({ children }) => <p className="mb-1 last:mb-0">{children}</p>,
+        ul: ({ children }) => <ul className="list-disc list-inside space-y-0.5 my-1">{children}</ul>,
+        ol: ({ children }) => <ol className="list-decimal list-inside space-y-0.5 my-1">{children}</ol>,
+        li: ({ children }) => <li className="text-sm">{children}</li>,
+        strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
+        code: ({ children }) => <code className="bg-black/10 px-1 rounded text-xs font-mono">{children}</code>,
+      }}
+    >
+      {content}
+    </ReactMarkdown>
+  )
+}
+
 export default function AIAssistant() {
   const { user } = useAuth()
   const isShop = user?.role === 'shop'
 
-  const [messages, setMessages] = useState([
-    {
-      role: 'assistant',
-      content: isShop
-        ? `Hello ${user?.name}! I'm Tejam's AI assistant. I can help you write food descriptions, suggest prices, and give tips on reducing food waste. What would you like help with today?`
-        : `Hello ${user?.name}! I'm Tejam's AI assistant. I can help you find the best food deals in Uzbekistan, tell you about local cuisine, and answer questions about how Tejam works. What can I help you with?`,
-    },
-  ])
+  const initialMessage = {
+    role: 'assistant',
+    content: isShop
+      ? `Hello ${user?.name}! I'm Tejam's AI assistant. I can help you write food descriptions, suggest prices, check your listings and orders, and give tips on reducing food waste. What would you like help with today?`
+      : `Hello ${user?.name}! I'm Tejam's AI assistant. I can help you find the best food deals in Uzbekistan, tell you about local cuisine, and answer questions about how Tejam works. What can I help you with?`,
+  }
+
+  const [messages, setMessages] = useState([initialMessage])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const messagesEndRef = useRef(null)
@@ -51,22 +69,26 @@ export default function AIAssistant() {
     if (!messageText) return
 
     setInput('')
-    setMessages(prev => [...prev, { role: 'user', content: messageText }])
+    const updatedMessages = [...messages, { role: 'user', content: messageText }]
+    setMessages(updatedMessages)
     setLoading(true)
+
+    // Build history excluding the initial greeting (index 0)
+    const history = updatedMessages.slice(1, -1)
 
     try {
       const res = await api.post('/ai/chat', {
         message: messageText,
-        context: `User is a ${user?.role} named ${user?.name}`,
+        history,
       })
       setMessages(prev => [...prev, { role: 'assistant', content: res.data.reply }])
     } catch (err) {
-      const errMsg = err.response?.data?.error || 'Sorry, I encountered an error. Please check your API key.'
-      setMessages(prev => [...prev, {
-        role: 'assistant',
-        content: errMsg,
-        isError: true,
-      }])
+      const status = err.response?.status
+      const errMsg = err.response?.data?.error ||
+        (status === 429
+          ? 'AI quota exceeded. Please try again in a few minutes.'
+          : 'Sorry, I encountered an error. Please try again.')
+      setMessages(prev => [...prev, { role: 'assistant', content: errMsg, isError: true }])
     } finally {
       setLoading(false)
     }
@@ -75,6 +97,11 @@ export default function AIAssistant() {
   const handleSubmit = (e) => {
     e.preventDefault()
     sendMessage()
+  }
+
+  const handleClear = () => {
+    setMessages([initialMessage])
+    setInput('')
   }
 
   const suggestions = isShop ? SHOP_SUGGESTIONS : CUSTOMER_SUGGESTIONS
@@ -89,12 +116,22 @@ export default function AIAssistant() {
         <div>
           <h1 className="text-xl font-bold text-gray-900">AI Assistant</h1>
           <p className="text-sm text-gray-500">
-            Powered by Gemini 2.5 · {isShop ? 'Shop mode' : 'Customer mode'}
+            Powered by Gemini 2.0 · {isShop ? 'Shop mode' : 'Customer mode'}
           </p>
         </div>
-        <div className="ml-auto flex items-center gap-1.5">
-          <div className="w-2 h-2 bg-primary-600 rounded-full animate-pulse" />
-          <span className="text-xs text-gray-500">Online</span>
+        <div className="ml-auto flex items-center gap-3">
+          <div className="flex items-center gap-1.5">
+            <div className="w-2 h-2 bg-primary-600 rounded-full animate-pulse" />
+            <span className="text-xs text-gray-500">Online</span>
+          </div>
+          {messages.length > 1 && (
+            <button
+              onClick={handleClear}
+              className="text-xs text-gray-400 hover:text-gray-600 border border-gray-200 px-2.5 py-1 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              Clear chat
+            </button>
+          )}
         </div>
       </div>
 
@@ -119,12 +156,12 @@ export default function AIAssistant() {
                   : 'bg-white text-gray-800 shadow-sm border border-gray-100 rounded-tl-sm'
               }`}
             >
-              {msg.content.split('\n').map((line, li) => (
-                <span key={li}>
-                  {line}
-                  {li < msg.content.split('\n').length - 1 && <br />}
-                </span>
-              ))}
+              {msg.role === 'assistant' && !msg.isError
+                ? <MessageContent content={msg.content} />
+                : msg.content.split('\n').map((line, li, arr) => (
+                    <span key={li}>{line}{li < arr.length - 1 && <br />}</span>
+                  ))
+              }
             </div>
             {msg.role === 'user' && (
               <div className="w-7 h-7 bg-primary-100 rounded-full flex items-center justify-center flex-shrink-0 ml-2 mt-1">
@@ -173,7 +210,7 @@ export default function AIAssistant() {
           type="text"
           value={input}
           onChange={e => setInput(e.target.value)}
-          placeholder={isShop ? 'Ask about pricing, descriptions, waste reduction…' : 'Ask about deals, food, or how Tejam works…'}
+          placeholder={isShop ? 'Ask about pricing, your listings, orders…' : 'Ask about deals, food, or how Tejam works…'}
           className="input-field flex-1"
           disabled={loading}
         />
@@ -196,7 +233,7 @@ export default function AIAssistant() {
       </form>
 
       <p className="text-center text-xs text-gray-400 mt-2">
-        Powered by Google Gemini · gemini-2.5-flash
+        Powered by Google Gemini · gemini-2.0-flash
       </p>
     </div>
   )

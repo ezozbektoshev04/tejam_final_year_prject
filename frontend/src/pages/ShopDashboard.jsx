@@ -284,10 +284,13 @@ export default function ShopDashboard() {
         </div>
       </div>
 
-      {/* Recent Orders */}
+      {/* Recent Orders preview */}
       <div className="card">
-        <div className="p-5 border-b border-gray-100">
+        <div className="p-5 border-b border-gray-100 flex items-center justify-between">
           <h2 className="font-semibold text-gray-900">Recent orders</h2>
+          <Link to="/shop-orders" className="text-sm font-semibold text-primary-700 hover:text-primary-900 transition-colors">
+            View all orders →
+          </Link>
         </div>
         {orders.length === 0 ? (
           <div className="p-10 text-center text-gray-400">

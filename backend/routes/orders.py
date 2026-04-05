@@ -2,6 +2,7 @@ from datetime import datetime, timedelta
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from models import db, User, Shop, FoodItem, Order, Review
+from utils.notifications import create_notification
 
 orders_bp = Blueprint("orders", __name__)
 
@@ -14,22 +15,68 @@ def list_orders():
 
     if user.role == "customer":
         orders = Order.query.filter_by(customer_id=user_id).order_by(Order.created_at.desc()).all()
+        return jsonify([o.to_dict() for o in orders])
+
     elif user.role == "shop" and user.shops:
-        shop_ids = [s.id for s in user.shops]
-        food_ids = [
-            item.id
-            for s in user.shops
-            for item in s.food_items
-        ]
-        orders = (
-            Order.query.filter(Order.food_item_id.in_(food_ids))
-            .order_by(Order.created_at.desc())
-            .all()
-        )
+        # --- optional filters ---
+        shop_id_filter = request.args.get("shop_id", type=int)
+        status_filter  = request.args.get("status")
+        payment_filter = request.args.get("payment")
+        search         = request.args.get("search", "").strip()
+        start_str      = request.args.get("start")
+        end_str        = request.args.get("end")
+        page           = request.args.get("page", 1, type=int)
+        per_page       = request.args.get("per_page", 20, type=int)
+
+        # Resolve which food_ids belong to this owner (optionally filtered by branch)
+        owner_shop_ids = [s.id for s in user.shops]
+        if shop_id_filter:
+            if shop_id_filter not in owner_shop_ids:
+                return jsonify({"error": "Unauthorized"}), 403
+            from models import Shop as ShopModel
+            target = ShopModel.query.get_or_404(shop_id_filter)
+            food_ids = [item.id for item in target.food_items]
+        else:
+            food_ids = [item.id for s in user.shops for item in s.food_items]
+
+        query = Order.query.filter(Order.food_item_id.in_(food_ids))
+
+        if status_filter:
+            query = query.filter(Order.status == status_filter)
+        if payment_filter:
+            query = query.filter(Order.payment_method == payment_filter)
+        if start_str:
+            try:
+                query = query.filter(Order.created_at >= datetime.strptime(start_str, "%Y-%m-%d"))
+            except ValueError:
+                pass
+        if end_str:
+            try:
+                end_dt = datetime.strptime(end_str, "%Y-%m-%d").replace(hour=23, minute=59, second=59)
+                query = query.filter(Order.created_at <= end_dt)
+            except ValueError:
+                pass
+        if search:
+            # search by order id (exact) or item name (partial)
+            try:
+                oid = int(search)
+                query = query.filter(Order.id == oid)
+            except ValueError:
+                query = query.join(FoodItem).filter(FoodItem.name.ilike(f"%{search}%"))
+
+        query = query.order_by(Order.created_at.desc())
+        total = query.count()
+        orders = query.offset((page - 1) * per_page).limit(per_page).all()
+
+        return jsonify({
+            "orders": [o.to_dict() for o in orders],
+            "total": total,
+            "page": page,
+            "per_page": per_page,
+        })
+
     else:
         return jsonify({"error": "Unauthorized"}), 403
-
-    return jsonify([o.to_dict() for o in orders])
 
 
 @orders_bp.route("/", methods=["POST"])
@@ -75,6 +122,25 @@ def create_order():
         item.is_available = False
 
     db.session.add(order)
+    db.session.flush()  # get order.id before commit
+
+    # Notify shop owner
+    shop_owner_id = item.shop.owner.id if item.shop and item.shop.owner else None
+    if shop_owner_id:
+        create_notification(
+            shop_owner_id,
+            f"New order #{order.id} — {item.name} × {quantity}",
+            link="/shop-orders",
+        )
+
+    # Low stock warning for shop owner
+    if shop_owner_id and item.quantity <= 2 and item.quantity > 0:
+        create_notification(
+            shop_owner_id,
+            f"Low stock: '{item.name}' has only {item.quantity} left",
+            link="/listings",
+        )
+
     db.session.commit()
     return jsonify(order.to_dict()), 201
 
@@ -101,6 +167,17 @@ def update_status(order_id):
         return jsonify({"error": f"Invalid status. Must be one of: {valid_statuses}"}), 400
 
     order.status = new_status
+
+    # Notify customer
+    messages = {
+        "confirmed":  f"Your order #{order.id} has been confirmed! Get ready for pickup.",
+        "picked_up":  f"Order #{order.id} marked as picked up. Enjoy your meal!",
+        "cancelled":  f"Your order #{order.id} was cancelled by the shop.",
+    }
+    msg = messages.get(new_status)
+    if msg:
+        create_notification(order.customer_id, msg, link="/orders")
+
     db.session.commit()
     return jsonify(order.to_dict())
 
@@ -269,5 +346,10 @@ def confirm_pickup(token):
         return jsonify({"error": "Order already picked up"}), 400
 
     order.status = "picked_up"
+    create_notification(
+        order.customer_id,
+        f"Order #{order.id} marked as picked up. Enjoy your meal!",
+        link="/orders",
+    )
     db.session.commit()
     return jsonify(order.to_dict())

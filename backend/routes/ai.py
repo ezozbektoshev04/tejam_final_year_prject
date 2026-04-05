@@ -1,7 +1,7 @@
 import json
 from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from models import User
+from models import User, Order, FoodItem, Shop
 
 ai_bp = Blueprint("ai", __name__)
 
@@ -133,6 +133,42 @@ Return only valid JSON, no extra text or markdown."""
         })
 
 
+def _build_live_context(user):
+    """Build a context string with the user's real data from the DB."""
+    lines = []
+    if user.role == "shop" and user.shops:
+        lines.append(f"Shop owner of: {', '.join(s.name for s in user.shops)} ({len(user.shops)} branches)")
+        food_ids = [item.id for s in user.shops for item in s.food_items]
+        listings = FoodItem.query.filter(FoodItem.id.in_(food_ids)).all() if food_ids else []
+        if listings:
+            lines.append("Current listings:")
+            for item in listings[:8]:
+                status = "available" if item.is_available else "hidden"
+                lines.append(f"  - {item.name}: {int(item.discounted_price):,} UZS (was {int(item.original_price):,}) qty={item.quantity} [{status}]")
+        low_stock = [i for i in listings if i.quantity <= 2 and i.is_available]
+        if low_stock:
+            lines.append(f"Low stock items (≤2 left): {', '.join(i.name for i in low_stock)}")
+        recent_orders = (
+            Order.query.filter(Order.food_item_id.in_(food_ids))
+            .order_by(Order.created_at.desc()).limit(5).all()
+        ) if food_ids else []
+        pending = [o for o in recent_orders if o.status == "pending"]
+        if pending:
+            lines.append(f"Pending orders needing attention: {len(pending)}")
+
+    elif user.role == "customer":
+        recent_orders = (
+            Order.query.filter_by(customer_id=user.id)
+            .order_by(Order.created_at.desc()).limit(5).all()
+        )
+        if recent_orders:
+            lines.append("Recent orders:")
+            for o in recent_orders:
+                lines.append(f"  - Order #{o.id}: {o.food_item.name if o.food_item else '?'} — {o.status}")
+
+    return "\n".join(lines) if lines else ""
+
+
 @ai_bp.route("/chat", methods=["POST"])
 @jwt_required()
 def chat():
@@ -144,7 +180,7 @@ def chat():
         return jsonify({"error": "No data provided"}), 400
 
     message_text = data.get("message", "")
-    context = data.get("context", "")
+    history = data.get("history", [])  # list of {role, content}
 
     if not message_text:
         return jsonify({"error": "message is required"}), 400
@@ -155,28 +191,41 @@ def chat():
             "reply": "I'm Tejam's AI assistant! I can help you find the best food deals in Uzbekistan, suggest prices for your listings, or answer questions about reducing food waste. (AI service temporarily unavailable — please check your Gemini API key.)"
         })
 
-    system_context = f"""You are Tejam's helpful AI assistant — Tejam is a food surplus marketplace in Uzbekistan inspired by Too Good To Go.
-You help connect shops with surplus food to customers at discounted prices, reducing food waste.
+    live_context = _build_live_context(user)
+
+    system_prompt = f"""You are Tejam's helpful AI assistant. Tejam is a food surplus marketplace in Uzbekistan (like Too Good To Go) connecting shops with surplus food to customers at discounted prices, reducing food waste.
 
 Current user: {user.name} (role: {user.role})
-{f"Context: {context}" if context else ""}
+{f"Live account data:\n{live_context}" if live_context else ""}
 
 You know about:
 - Uzbek cuisine: plov, samsa, non bread, shurpa, manti, lagman, dimlama, chuchvara
-- City: Tashkent
-- Prices are in UZS (1 USD ≈ 12,700 UZS)
-- The platform helps reduce food waste while giving customers great deals (30-70% off)
+- City: Tashkent. Prices in UZS (1 USD ≈ 12,700 UZS)
+- Platform gives customers 30-70% off surplus food
 
-Be friendly, concise, and helpful. For shop owners: help with pricing, descriptions, and waste reduction tips.
-For customers: help find deals, suggest foods, and explain how the platform works.
+Be friendly, concise, and helpful. Use markdown for formatting when it helps readability (bullet points, bold).
+For shop owners: help with pricing, descriptions, waste reduction, and their listings.
+For customers: help find deals, explain how Tejam works, suggest Uzbek foods."""
 
-User message: {message_text}"""
+    # Build multi-turn contents list
+    contents = [{"role": "user", "parts": [{"text": system_prompt}]},
+                {"role": "model", "parts": [{"text": "Understood! I'm ready to help."}]}]
+
+    for msg in history[-10:]:  # last 10 messages for context window efficiency
+        role = "user" if msg.get("role") == "user" else "model"
+        contents.append({"role": role, "parts": [{"text": msg.get("content", "")}]})
+
+    contents.append({"role": "user", "parts": [{"text": message_text}]})
 
     try:
-        reply = gemini_generate(client, system_context)
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=contents,
+        )
+        reply = response.text.strip()
         return jsonify({"reply": reply})
     except Exception as e:
         error_str = str(e)
-        if "429" in error_str or "quota" in error_str.lower():
-            return jsonify({"error": "AI quota exceeded. Please try again later."}), 429
-        return jsonify({"error": "AI service error. Please try again."}), 500
+        if "429" in error_str or "RESOURCE_EXHAUSTED" in error_str:
+            return jsonify({"error": "AI quota exceeded. Please try again in a few minutes."}), 429
+        return jsonify({"error": f"AI service error: {error_str}"}), 500

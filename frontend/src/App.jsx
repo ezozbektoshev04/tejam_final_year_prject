@@ -11,6 +11,7 @@ import FoodDetail from './pages/FoodDetail'
 import Orders from './pages/Orders'
 import ShopDashboard from './pages/ShopDashboard'
 import ShopListings from './pages/ShopListings'
+import ShopOrders from './pages/ShopOrders'
 import AIAssistant from './pages/AIAssistant'
 import PickupConfirm from './pages/PickupConfirm'
 import PaymentSuccess from './pages/PaymentSuccess'
@@ -50,6 +51,11 @@ function Layout() {
         <Route path="/listings" element={
           <ProtectedRoute role="shop">
             <ShopListings />
+          </ProtectedRoute>
+        } />
+        <Route path="/shop-orders" element={
+          <ProtectedRoute role="shop">
+            <ShopOrders />
           </ProtectedRoute>
         } />
 
