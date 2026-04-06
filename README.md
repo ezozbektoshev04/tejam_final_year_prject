@@ -5,21 +5,32 @@ Tejam (тежам — "economical" in Uzbek) is a full-stack web application ins
 ## Features
 
 ### For customers
-- Browse discounted food from real Tashkent brands: Korzinka, Havas, Safia, Navat, Caravan
+- Browse discounted food from real Tashkent brands: Korzinka, Havas, Sofia, Tarnov, Diet Bistro, Feed UP
+- **AI-powered personalized recommendations** — "Recommended for you" strip based on order history
 - **GPS-based "Near me" sorting** — branches sorted by distance from your location
 - **Two payment options** on every order: pay online via Stripe or reserve and pay cash in store
 - **QR code pickup** — show the QR code at the store, staff scans to confirm
 - **Order tracking** — real-time status: pending → confirmed → picked up
-- **Google Maps directions** built into every order
+- **Yandex Maps directions** built into every food item page
 - **Reviews** after completed pickups
 
 ### For shop partners
-- **One company login manages all branches** — Korzinka logs in once and sees all 3 branches
+- **One company login manages all branches** — Korzinka logs in once and sees both branches
 - **Branch selector** in dashboard and listings — switch between branches or view all at once
 - **Revenue analytics** — Recharts graphs per branch or aggregated across all locations
+- **Excel report download** — export orders by period (daily / weekly / hourly) and branch
 - **Food listing management** — create, edit, toggle availability per branch
+- **Shop Orders page** — dedicated orders view with filters, search, pagination
+- **In-app notifications** — bell icon with unread badge, auto-polls every 30 seconds
 - **AI-powered tools** — auto-generate descriptions and suggest optimal discount prices (Google Gemini)
 - **Photo upload** for listings — drag and drop or click
+
+### AI assistant
+- **Live data context** — AI chatbot has real-time access to listings, prices, orders, and revenue
+- **Persistent chat history** — session survives page navigation, cleared only on logout
+- **Shop mode** — ask about today's sales, revenue, pending orders, top items
+- **Customer mode** — ask about cheapest deals, current listings, recent orders
+- **Markdown rendering** — formatted responses with bold, bullets, and tables
 
 ### For admins
 - **Admin panel** at `/admin` — separate login portal
@@ -37,11 +48,13 @@ Tejam (тежам — "economical" in Uzbek) is a full-stack web application ins
 
 | Layer     | Technology |
 |-----------|-----------|
-| Frontend  | React 18 + Vite + Tailwind CSS + React Router v6 + Axios + Recharts |
+| Frontend  | React 18 + Vite + Tailwind CSS + React Router v6 + Axios + Recharts + react-markdown |
 | Backend   | Python Flask + SQLAlchemy + Flask-JWT-Extended + Flask-Bcrypt + Flask-CORS |
 | Database  | SQLite (via SQLAlchemy) |
 | Payments  | Stripe Checkout (test mode) via `stripe` Python SDK |
-| AI        | Google Gemini API (`gemini-2.5-flash`) via `google-genai` |
+| AI        | Google Gemini API (`gemini-2.0-flash`) via `google-genai` |
+| Maps      | Yandex Maps JS API 2.1 |
+| Reports   | openpyxl (Excel export) |
 
 ## Project Structure
 
@@ -49,7 +62,7 @@ Tejam (тежам — "economical" in Uzbek) is a full-stack web application ins
 tejam/
 ├── backend/
 │   ├── app.py              # Flask app factory, DB migration, seed data
-│   ├── models.py           # SQLAlchemy models (User, Shop, FoodItem, Order, Review)
+│   ├── models.py           # SQLAlchemy models (User, Shop, FoodItem, Order, Review, Notification)
 │   ├── config.py           # Config class (keys, CORS, upload settings)
 │   ├── routes/
 │   │   ├── auth.py         # Register / login / me
@@ -57,9 +70,13 @@ tejam/
 │   │   ├── food_items.py   # Food item CRUD with shop_id support
 │   │   ├── orders.py       # Orders, QR pickup, stats (branch filter)
 │   │   ├── payments.py     # Stripe checkout session, verify, retry
-│   │   ├── ai.py           # Gemini AI: describe, suggest-price, chat
+│   │   ├── ai.py           # Gemini AI: describe, suggest-price, recommendations, chat
+│   │   ├── reports.py      # Excel export with period/granularity filter
+│   │   ├── notifications.py # In-app notifications (list, read, read-all)
 │   │   ├── admin.py        # Admin-only: stats, user/shop management
 │   │   └── uploads.py      # Image upload / serve
+│   ├── utils/
+│   │   └── notifications.py # create_notification helper
 │   ├── uploads/            # Uploaded food images (gitignored)
 │   ├── requirements.txt
 │   └── .env
@@ -70,31 +87,35 @@ tejam/
     ├── src/
     │   ├── pages/
     │   │   ├── Home.jsx            # Landing page with hero + stats
-    │   │   ├── Browse.jsx          # Browse all listings
-    │   │   ├── FoodDetail.jsx      # Item detail + order form (Stripe / cash)
+    │   │   ├── Browse.jsx          # Browse listings + AI recommendations strip
+    │   │   ├── FoodDetail.jsx      # Item detail + order form + Yandex Maps
     │   │   ├── Orders.jsx          # Customer orders with QR, retry payment
     │   │   ├── PaymentSuccess.jsx  # Post-Stripe redirect confirmation
-    │   │   ├── ShopDashboard.jsx   # Branch stats + orders (branch selector)
+    │   │   ├── ShopDashboard.jsx   # Branch stats + report download
     │   │   ├── ShopListings.jsx    # Manage listings per branch
-    │   │   ├── AIAssistant.jsx     # Chat + tools for shop owners
+    │   │   ├── ShopOrders.jsx      # Shop orders with filters and pagination
+    │   │   ├── AIAssistant.jsx     # Persistent AI chat (shop + customer modes)
     │   │   ├── PickupConfirm.jsx   # QR scan page for shop staff
     │   │   ├── AdminPanel.jsx      # Admin dashboard (Overview/Customers/Shops)
     │   │   ├── AdminLogin.jsx      # Separate admin login portal
     │   │   ├── Login.jsx
     │   │   └── Register.jsx
     │   ├── components/
-    │   │   ├── Navbar.jsx          # White navbar, role-aware links
+    │   │   ├── Navbar.jsx          # White navbar, role-aware links, notification bell
+    │   │   ├── NotificationBell.jsx # Bell icon, unread badge, 30s polling
     │   │   ├── ProtectedRoute.jsx  # Role-based route guard with custom loginPath
     │   │   ├── FoodCard.jsx
-    │   │   ├── ShopCard.jsx
-    │   │   ├── MapEmbed.jsx
+    │   │   ├── ShopCard.jsx        # Distance badge when near-me is active
+    │   │   ├── MapEmbed.jsx        # Yandex Maps JS API 2.1 embed
     │   │   └── ImageUpload.jsx
     │   ├── context/
-    │   │   └── AuthContext.jsx     # JWT auth state, login/logout
+    │   │   └── AuthContext.jsx     # JWT auth state, login/logout (clears chat history)
     │   ├── utils/
     │   │   └── distance.js         # Haversine formula for GPS sorting
     │   └── api/
     │       └── axios.js            # Axios instance with JWT + 401 interceptors
+    ├── .env                        # VITE_YANDEX_MAPS_API_KEY
+    ├── .env.example
     ├── package.json
     └── vite.config.js
 ```
@@ -106,6 +127,7 @@ tejam/
 - Node.js 18+
 - A Stripe account (free) for payment testing
 - A Google Gemini API key (optional — free at https://aistudio.google.com)
+- A Yandex Maps API key (optional — free at https://developer.tech.yandex.ru)
 
 ### Backend Setup
 
@@ -126,7 +148,7 @@ JWT_SECRET_KEY=your-jwt-secret-key-here
 GEMINI_API_KEY=your-gemini-api-key-here
 DATABASE_URL=sqlite:///tejam.db
 STRIPE_SECRET_KEY=sk_test_your_stripe_test_key_here
-FRONTEND_URL=http://localhost:5174
+FRONTEND_URL=http://localhost:5173
 EOF
 
 # Run the Flask server
@@ -135,11 +157,12 @@ python app.py
 
 The backend starts on **http://localhost:5000**
 
-On first run, the database is automatically created and seeded:
-- **5 company accounts**, each owning multiple branches (12 total)
-- **14 food listings** spread across all branches
-- 2 customer accounts + sample orders and reviews
-- 1 admin account (guaranteed on every startup)
+On first run, the database is automatically created and seeded with full demo data:
+- **6 shop partner accounts**, each owning 2 branches (12 branches total)
+- **84 food listings** (7 bags per branch), with category-matched images
+- **10 customer accounts**, each with 15+ orders spread over 45 days
+- **67 reviews** on completed orders
+- **1 admin account** (guaranteed on every startup)
 
 ### Frontend Setup
 
@@ -149,35 +172,43 @@ cd frontend
 # Install dependencies
 npm install
 
+# Create .env file (copy from example and fill in your key)
+cp .env.example .env
+# Edit .env and set VITE_YANDEX_MAPS_API_KEY=your-key
+
 # Start development server
 npm run dev
 ```
 
-The frontend starts on **http://localhost:5173** (or 5174 if 5173 is in use).
+The frontend starts on **http://localhost:5173**.
 
 ## Demo Accounts
 
 ### Admin
 | Email | Password | Portal |
 |-------|----------|--------|
-| admin@tejam.uz | password123 | /admin/login |
+| admin@tejam.uz | admin123 | /admin/login |
 
 ### Customers
 | Email | Password |
 |-------|----------|
-| customer1@example.com | password123 |
-| customer2@example.com | password123 |
+| customer1@tejam.uz | password123 |
+| customer2@tejam.uz | password123 |
+| customer3@tejam.uz | password123 |
+| … | … |
+| customer10@tejam.uz | password123 |
 
 ### Shop partners — one login per company
-Each company account manages all its branches from a single login. Use the branch selector in the dashboard to switch between locations.
+Each company account manages both its branches from a single login. Use the branch selector in the dashboard to switch between locations.
 
-| Company | Branches | Email | Password |
-|---------|----------|-------|----------|
-| Korzinka | 3 (Amir Temur, Chilonzor, Yunusobod) | korzinka@tejam.uz | password123 |
-| Havas | 3 (Mustaqillik, Shayxontohur, Mirzo Ulug'bek) | havas@tejam.uz | password123 |
-| Safia | 2 (Chilonzor, Yakkasaroy) | safia@tejam.uz | password123 |
-| Navat | 2 (Buyuk Ipak Yo'li, Uchtepa) | navat@tejam.uz | password123 |
-| Caravan | 2 (Navoiy, Sergeli) | caravan@tejam.uz | password123 |
+| Company | Category | Branches | Email | Password |
+|---------|----------|----------|-------|----------|
+| Korzinka | Grocery | 2 | korzinka@tejam.uz | password123 |
+| Havas | Grocery | 2 | havas@tejam.uz | password123 |
+| Sofia | Bakery | 2 | sofia@tejam.uz | password123 |
+| Tarnov | Restaurant | 2 | tarnov@tejam.uz | password123 |
+| Diet Bistro | Restaurant | 2 | dietbistro@tejam.uz | password123 |
+| Feed UP | Fast Food | 2 | feedup@tejam.uz | password123 |
 
 ## Environment Variables
 
@@ -186,13 +217,19 @@ Each company account manages all its branches from a single login. Use the branc
 ```env
 SECRET_KEY=your-secret-key-here
 JWT_SECRET_KEY=your-jwt-secret-key-here
-GEMINI_API_KEY=AIza...                        # Optional — AI features
+GEMINI_API_KEY=AIza...                        # Optional — AI features (gemini-2.0-flash)
 DATABASE_URL=sqlite:///tejam.db
 STRIPE_SECRET_KEY=sk_test_...                 # Required for online payments
-FRONTEND_URL=http://localhost:5174            # Used for Stripe redirect URLs
+FRONTEND_URL=http://localhost:5173            # Used for Stripe redirect URLs
 ```
 
-> The app works without Gemini and Stripe keys — AI features show fallback responses and only the cash payment option will function.
+`frontend/.env`:
+
+```env
+VITE_YANDEX_MAPS_API_KEY=your-key-here       # Optional — interactive map on food detail page
+```
+
+> The app works without Gemini, Stripe, and Yandex Maps keys — AI features show fallback responses, only cash payment works, and the map shows address text with external links instead.
 
 ## Stripe Setup (Test Mode)
 
@@ -228,7 +265,7 @@ CVC:          Any 3 digits
 ### Food Items (`/api/food-items`)
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/` | List available items (filter: shop_id, search) |
+| GET | `/` | List available items (filter: shop_id, search, category) |
 | GET | `/:id` | Item detail with reviews |
 | POST | `/` | Create item — requires `shop_id` (JWT, shop) |
 | PUT | `/:id` | Update item (JWT, owner of that branch) |
@@ -237,7 +274,7 @@ CVC:          Any 3 digits
 ### Orders (`/api/orders`)
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/` | My orders (customer) or all branch orders (shop) |
+| GET | `/` | My orders (customer) or filtered branch orders (shop) |
 | POST | `/` | Place cash order (JWT, customer) |
 | PUT | `/:id/status` | Update status (JWT, shop) |
 | DELETE | `/:id` | Cancel pending or pending_payment order |
@@ -258,7 +295,20 @@ CVC:          Any 3 digits
 |--------|------|-------------|
 | POST | `/describe` | Generate food description (JWT, shop) |
 | POST | `/suggest-price` | Suggest discount price (JWT, shop) |
-| POST | `/chat` | AI chat assistant (JWT) |
+| GET | `/recommendations` | Personalized deal recommendations (JWT, customer) |
+| POST | `/chat` | AI chat assistant with live data context (JWT) |
+
+### Reports (`/api/reports`)
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/export` | Download Excel report (JWT, shop) — params: shop_id, start, end, granularity |
+
+### Notifications (`/api/notifications`)
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/` | List notifications + unread count (JWT) |
+| PUT | `/read-all` | Mark all notifications as read (JWT) |
+| PUT | `/:id/read` | Mark one notification as read (JWT) |
 
 ### Admin (`/api/admin`) — JWT required, admin role only
 | Method | Path | Description |
@@ -286,8 +336,9 @@ CVC:          Any 3 digits
 | `/register` | Public — customer / shop registration |
 | `/pickup/:token` | Public — QR pickup confirmation for shop staff |
 | `/orders` | Customer only |
-| `/dashboard` | Shop only — branch analytics |
+| `/dashboard` | Shop only — branch analytics + report download |
 | `/listings` | Shop only — branch listings management |
+| `/shop-orders` | Shop only — orders with filters and pagination |
 | `/ai` | Any logged-in user |
 | `/payment/success` | Post-Stripe redirect (customer) |
 | `/admin/login` | Public — admin portal login |
@@ -313,7 +364,7 @@ cd backend && source venv/bin/activate && python app.py
 cd frontend && npm run dev
 ```
 
-Open **http://localhost:5173** (or 5174) in your browser.
+Open **http://localhost:5173** in your browser.
 
 ## Color Theme
 
