@@ -59,6 +59,9 @@ def _migrate_db():
     with db.engine.connect() as conn:
         for stmt in [
             "ALTER TABLE orders ADD COLUMN payment_method VARCHAR(10) DEFAULT 'cash'",
+            "ALTER TABLE reviews ADD COLUMN food_item_id INTEGER REFERENCES food_items(id)",
+            "ALTER TABLE orders ADD COLUMN order_ref VARCHAR(12)",
+            "ALTER TABLE food_items ADD COLUMN is_archived BOOLEAN DEFAULT 0",
         ]:
             try:
                 conn.execute(text(stmt))
@@ -91,7 +94,6 @@ def seed_database(app):
 
     # ── SHOP ACCOUNTS ────────────────────────────────────────────────────────
     u_korzinka   = User(email="korzinka@tejam.uz",   password_hash=password_hash, role="shop", name="Korzinka",    phone="+998781230010")
-    u_havas      = User(email="havas@tejam.uz",      password_hash=password_hash, role="shop", name="Havas",       phone="+998781230020")
     u_sofia      = User(email="sofia@tejam.uz",      password_hash=password_hash, role="shop", name="Sofia",       phone="+998781230030")
     u_tarnov     = User(email="tarnov@tejam.uz",     password_hash=password_hash, role="shop", name="Tarnov",      phone="+998781230040")
     u_dietbistro = User(email="dietbistro@tejam.uz", password_hash=password_hash, role="shop", name="Diet Bistro", phone="+998781230050")
@@ -115,7 +117,7 @@ def seed_database(app):
         u = User(email=email, password_hash=password_hash, role="customer", name=name, phone=phone)
         customers.append(u)
 
-    all_users = [u_korzinka, u_havas, u_sofia, u_tarnov, u_dietbistro, u_feedup] + customers
+    all_users = [u_korzinka, u_sofia, u_tarnov, u_dietbistro, u_feedup] + customers
     db.session.add_all(all_users)
     db.session.flush()
 
@@ -128,64 +130,54 @@ def seed_database(app):
     # Korzinka — Grocery — 2 branches
     sk1 = Shop(user_id=u_korzinka.id, name="Korzinka",
         description="Uzbekistan's leading supermarket chain with fresh in-store bakery, ready meals, dairy, produce, and groceries at affordable everyday prices.",
-        address="Amir Temur shoh ko'chasi 1, Mirzo Ulug'bek tumani", city="Tashkent",
-        category="Grocery", image_url=GROCERY_IMG, rating=4.7, is_active=True, lat=41.3105, lng=69.3247)
+        address="Chilonzor (C1)", city="Tashkent",
+        category="Grocery", image_url=GROCERY_IMG, rating=4.7, is_active=True, lat=41.310040, lng=69.292511)
     sk2 = Shop(user_id=u_korzinka.id, name="Korzinka",
         description="Uzbekistan's leading supermarket chain with fresh in-store bakery, ready meals, dairy, produce, and groceries at affordable everyday prices.",
-        address="Yunusobod ko'chasi 12, Yunusobod tumani", city="Tashkent",
-        category="Grocery", image_url=GROCERY_IMG, rating=4.8, is_active=True, lat=41.3552, lng=69.2858)
-
-    # Havas — Grocery — 2 branches
-    sh1 = Shop(user_id=u_havas.id, name="Havas",
-        description="Tashkent's modern grocery and convenience chain. Wide selection of fresh produce, dairy, snacks, and daily essentials under one roof.",
-        address="Mustaqillik maydoni 6, Yunusobod tumani", city="Tashkent",
-        category="Grocery", image_url=GROCERY_IMG, rating=4.6, is_active=True, lat=41.2993, lng=69.2401)
-    sh2 = Shop(user_id=u_havas.id, name="Havas",
-        description="Tashkent's modern grocery and convenience chain. Wide selection of fresh produce, dairy, snacks, and daily essentials under one roof.",
-        address="Shayxontohur ko'chasi 33, Shayxontohur tumani", city="Tashkent",
-        category="Grocery", image_url=GROCERY_IMG, rating=4.5, is_active=True, lat=41.3163, lng=69.2556)
+        address="Oybek ko'chasi", city="Tashkent",
+        category="Grocery", image_url=GROCERY_IMG, rating=4.8, is_active=True, lat=41.295767, lng=69.274922)
 
     # Sofia — Bakery — 2 branches
     ss1 = Shop(user_id=u_sofia.id, name="Sofia",
         description="Premium Tashkent bakery known for freshly baked breads, croissants, cakes, and traditional Uzbek pastries. Everything made from scratch daily.",
-        address="Chilonzor ko'chasi 14, Chilonzor tumani", city="Tashkent",
-        category="Bakery", image_url=BAKERY_IMG, rating=4.9, is_active=True, lat=41.2950, lng=69.2100)
+        address="Chilonzor tumani", city="Tashkent",
+        category="Bakery", image_url=BAKERY_IMG, rating=4.9, is_active=True, lat=41.306707, lng=69.292044)
     ss2 = Shop(user_id=u_sofia.id, name="Sofia",
         description="Premium Tashkent bakery known for freshly baked breads, croissants, cakes, and traditional Uzbek pastries. Everything made from scratch daily.",
-        address="Navoiy ko'chasi 45, Mirzo Ulug'bek tumani", city="Tashkent",
-        category="Bakery", image_url=BAKERY_IMG, rating=4.8, is_active=True, lat=41.3200, lng=69.2800)
+        address="Mirzo Ulug'bek tumani", city="Tashkent",
+        category="Bakery", image_url=BAKERY_IMG, rating=4.8, is_active=True, lat=41.319319, lng=69.279934)
 
     # Tarnov — Restaurant — 2 branches
     st1 = Shop(user_id=u_tarnov.id, name="Tarnov",
         description="Upscale Uzbek restaurant serving authentic national cuisine — plov, manti, lagman, shurpa and kebabs in a traditional atmosphere.",
-        address="Buyuk Ipak Yo'li ko'chasi 78, Shayxontohur tumani", city="Tashkent",
-        category="Restaurant", image_url=RESTAURANT_IMG, rating=4.8, is_active=True, lat=41.3163, lng=69.2556)
+        address="Sabzor ko'chasi", city="Tashkent",
+        category="Restaurant", image_url=RESTAURANT_IMG, rating=4.8, is_active=True, lat=41.334887, lng=69.252877)
     st2 = Shop(user_id=u_tarnov.id, name="Tarnov",
         description="Upscale Uzbek restaurant serving authentic national cuisine — plov, manti, lagman, shurpa and kebabs in a traditional atmosphere.",
-        address="Uchtepa ko'chasi 22, Uchtepa tumani", city="Tashkent",
-        category="Restaurant", image_url=RESTAURANT_IMG, rating=4.7, is_active=True, lat=41.3080, lng=69.2030)
+        address="Chorsu", city="Tashkent",
+        category="Restaurant", image_url=RESTAURANT_IMG, rating=4.7, is_active=True, lat=41.325989, lng=69.229224)
 
     # Diet Bistro — Restaurant — 2 branches
     sd1 = Shop(user_id=u_dietbistro.id, name="Diet Bistro",
         description="Healthy dining concept in Tashkent. Balanced meals, salads, grain bowls, and fresh juices. Calorie-counted menus for health-conscious customers.",
-        address="Amir Temur ko'chasi 105, Yakkasaroy tumani", city="Tashkent",
-        category="Restaurant", image_url=RESTAURANT_IMG, rating=4.6, is_active=True, lat=41.2860, lng=69.2670)
+        address="Labzak ko'chasi", city="Tashkent",
+        category="Restaurant", image_url=RESTAURANT_IMG, rating=4.6, is_active=True, lat=41.337940, lng=69.267969)
     sd2 = Shop(user_id=u_dietbistro.id, name="Diet Bistro",
         description="Healthy dining concept in Tashkent. Balanced meals, salads, grain bowls, and fresh juices. Calorie-counted menus for health-conscious customers.",
-        address="Sergeli ko'chasi 5, Sergeli tumani", city="Tashkent",
-        category="Restaurant", image_url=RESTAURANT_IMG, rating=4.5, is_active=True, lat=41.2329, lng=69.2553)
+        address="Yunusobod tumani", city="Tashkent",
+        category="Restaurant", image_url=RESTAURANT_IMG, rating=4.5, is_active=True, lat=41.309593, lng=69.302958)
 
     # Feed UP — Fast Food — 2 branches
     sf1 = Shop(user_id=u_feedup.id, name="Feed UP",
         description="Tashkent's go-to fast food spot. Juicy burgers, crispy fries, hot dogs, chicken wraps, and refreshing drinks. Fast, fresh, and affordable.",
-        address="Navoiy ko'chasi 30, Mirzo Ulug'bek tumani", city="Tashkent",
-        category="Fast Food", image_url=FASTFOOD_IMG, rating=4.4, is_active=True, lat=41.3200, lng=69.2800)
+        address="Abay ko'chasi", city="Tashkent",
+        category="Fast Food", image_url=FASTFOOD_IMG, rating=4.4, is_active=True, lat=41.326146, lng=69.255397)
     sf2 = Shop(user_id=u_feedup.id, name="Feed UP",
-        description="Tashkent's go-to fast food spot. Juicy burgers, crispy fries, hot dogs, chicken wraps, and refreshing drinks. Fast, fast, fresh, and affordable.",
-        address="Qatortol ko'chasi 56, Chilonzor tumani", city="Tashkent",
-        category="Fast Food", image_url=FASTFOOD_IMG, rating=4.3, is_active=True, lat=41.2934, lng=69.2082)
+        description="Tashkent's go-to fast food spot. Juicy burgers, crispy fries, hot dogs, chicken wraps, and refreshing drinks. Fast, fresh, and affordable.",
+        address="Chilonzor (C1)", city="Tashkent",
+        category="Fast Food", image_url=FASTFOOD_IMG, rating=4.3, is_active=True, lat=41.311525, lng=69.288530)
 
-    all_shops = [sk1, sk2, sh1, sh2, ss1, ss2, st1, st2, sd1, sd2, sf1, sf2]
+    all_shops = [sk1, sk2, ss1, ss2, st1, st2, sd1, sd2, sf1, sf2]
     db.session.add_all(all_shops)
     db.session.flush()
 
@@ -283,66 +275,6 @@ def seed_database(app):
             description="Selection of local yogurts and soft cheeses from today's dairy section. All within date, perfect for snacking or cooking.",
             original_price=35000, discounted_price=14000, quantity=8,
             pickup_start="17:00", pickup_end="20:00", image_url=G3, is_available=True),
-
-        # ── Havas Branch 1 (sh1) — 7 bags ─────────────────────────────────
-        FoodItem(shop_id=sh1.id, name="Havas Grocery Rescue Bag",
-            description="End-of-day surplus from Havas — fresh produce, packaged goods, and pantry items. Great value, random assortment, always worth more than the price.",
-            original_price=50000, discounted_price=20000, quantity=10,
-            pickup_start="18:00", pickup_end="21:00", image_url=G1, is_available=True),
-        FoodItem(shop_id=sh1.id, name="Bakery Roll Bag (8 pieces)",
-            description="Havas freshly baked dinner rolls and buns from today's batch. Soft inside, golden outside. Perfect with soups or as a snack.",
-            original_price=28000, discounted_price=11000, quantity=12,
-            pickup_start="17:00", pickup_end="20:00", image_url=B2, is_available=True),
-        FoodItem(shop_id=sh1.id, name="Fruit Basket (mixed)",
-            description="Seasonal mixed fruit basket from Havas produce section — apples, bananas, oranges, and grapes. Fresh today, discounted to clear.",
-            original_price=42000, discounted_price=17000, quantity=8,
-            pickup_start="18:30", pickup_end="21:00", image_url=G2, is_available=True),
-        FoodItem(shop_id=sh1.id, name="Chilled Ready Meal (2 servings)",
-            description="Havas kitchen-prepared meals — grilled chicken with rice or pasta bake. Refrigerated, ready to heat. Made fresh this morning.",
-            original_price=55000, discounted_price=23000, quantity=6,
-            pickup_start="19:00", pickup_end="21:30", image_url=G4, is_available=True),
-        FoodItem(shop_id=sh1.id, name="Dairy & Eggs Bundle",
-            description="Milk, kefir, eggs (6 pcs), and butter from today's delivery. Local brands, fresh stock. Ideal for families.",
-            original_price=36000, discounted_price=15000, quantity=9,
-            pickup_start="17:00", pickup_end="20:00", image_url=G3, is_available=True),
-        FoodItem(shop_id=sh1.id, name="Snack Surprise Box",
-            description="Assorted snacks, crackers, chips, and sweets from Havas near-expiry shelf. Fun mix, guaranteed value.",
-            original_price=30000, discounted_price=12000, quantity=14,
-            pickup_start="19:00", pickup_end="22:00", image_url=G6, is_available=True),
-        FoodItem(shop_id=sh1.id, name="Veggie & Herb Pack",
-            description="Fresh vegetables and herbs from today's market — tomatoes, cucumbers, dill, parsley, and peppers. Great for salads and cooking.",
-            original_price=22000, discounted_price=9000, quantity=11,
-            pickup_start="18:00", pickup_end="21:00", image_url=G2, is_available=True),
-
-        # ── Havas Branch 2 (sh2) — 7 bags ─────────────────────────────────
-        FoodItem(shop_id=sh2.id, name="Havas Large Grocery Bag",
-            description="Havas Shayxontohur surplus bag — packed with groceries, snacks, and fresh items. Value always exceeds the price tag.",
-            original_price=65000, discounted_price=27000, quantity=7,
-            pickup_start="18:00", pickup_end="21:00", image_url=G1, is_available=True),
-        FoodItem(shop_id=sh2.id, name="Fresh Bread Bundle (3 loaves)",
-            description="Three freshly baked loaves from Havas bakery — white, grain, and lavash. All baked today and at their best right now.",
-            original_price=24000, discounted_price=10000, quantity=10,
-            pickup_start="17:30", pickup_end="20:30", image_url=B3, is_available=True),
-        FoodItem(shop_id=sh2.id, name="Cold Cuts & Cheese Platter",
-            description="Sliced meats and cheeses from Havas deli counter. Today's fresh stock — ideal for parties, sandwiches, or snacking.",
-            original_price=50000, discounted_price=21000, quantity=5,
-            pickup_start="18:00", pickup_end="21:00", image_url=G5, is_available=True),
-        FoodItem(shop_id=sh2.id, name="Juice & Beverage Pack",
-            description="Fresh juices, nectars, and soft drinks from today — apple, grape, peach. Best consumed today. 4-bottle pack.",
-            original_price=32000, discounted_price=13000, quantity=9,
-            pickup_start="17:00", pickup_end="20:00", image_url=G7, is_available=True),
-        FoodItem(shop_id=sh2.id, name="Produce Mystery Bag",
-            description="Fresh produce mystery bag — a random mix of today's vegetables and fruits that need to go. Always great value.",
-            original_price=38000, discounted_price=15000, quantity=12,
-            pickup_start="18:30", pickup_end="21:30", image_url=G2, is_available=True),
-        FoodItem(shop_id=sh2.id, name="Frozen Goods Pack",
-            description="Assorted frozen items from Havas — dumplings, frozen vegetables, and convenience meals. All in perfect condition.",
-            original_price=45000, discounted_price=19000, quantity=6,
-            pickup_start="18:00", pickup_end="21:00", image_url=G4, is_available=True),
-        FoodItem(shop_id=sh2.id, name="Sweet Treat Bag",
-            description="Chocolates, candies, cookies, and desserts from Havas confectionery section — near best-before, deeply discounted.",
-            original_price=28000, discounted_price=11000, quantity=10,
-            pickup_start="19:00", pickup_end="22:00", image_url=B5, is_available=True),
 
         # ── Sofia Bakery Branch 1 (ss1) — 7 bags ──────────────────────────
         FoodItem(shop_id=ss1.id, name="Sofia Pastry Bag (6 pieces)",
@@ -653,7 +585,7 @@ def seed_database(app):
             shop.rating = round(sum(shop_ratings[shop.id]) / len(shop_ratings[shop.id]), 1)
 
     db.session.commit()
-    print(f"Database seeded: 6 partners, {len(customers)} customers, {len(items)} listings, {len(all_orders)} orders, {len(all_reviews)} reviews.")
+    print(f"Database seeded: 5 partners, {len(customers)} customers, {len(items)} listings, {len(all_orders)} orders, {len(all_reviews)} reviews.")
 
 
 if __name__ == "__main__":

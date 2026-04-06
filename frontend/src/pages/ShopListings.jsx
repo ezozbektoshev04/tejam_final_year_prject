@@ -14,14 +14,20 @@ const EMPTY_FORM = {
 
 export default function ShopListings() {
   const [shops, setShops] = useState([])
-  const [selectedShopId, setSelectedShopId] = useState(null) // set after shops load
+  const [selectedShopId, setSelectedShopId] = useState(null)
   const [items, setItems] = useState([])
+  const [archivedItems, setArchivedItems] = useState([])
+  const [activeTab, setActiveTab] = useState('active') // 'active' | 'archived'
   const [loading, setLoading] = useState(true)
   const [modalOpen, setModalOpen] = useState(false)
   const [editItem, setEditItem] = useState(null)
   const [form, setForm] = useState(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(null)
+  const [archiving, setArchiving] = useState(null)
+  const [restoreModal, setRestoreModal] = useState(null) // item to restore
+  const [restoreForm, setRestoreForm] = useState({ quantity: 5, pickup_start: '17:00', pickup_end: '20:00' })
+  const [restoring, setRestoring] = useState(false)
   const [aiLoading, setAiLoading] = useState(false)
   const [aiPriceLoading, setAiPriceLoading] = useState(false)
   const [error, setError] = useState('')
@@ -31,11 +37,11 @@ export default function ShopListings() {
       const res = await api.get('/shops/my')
       const shopList = res.data
       setShops(shopList)
-      const firstId = shopList[0]?.id || null
-      setSelectedShopId(firstId)
-      // Gather all items from all branches
+      if (!selectedShopId) setSelectedShopId(shopList[0]?.id || null)
       const allItems = shopList.flatMap(s => s.food_items || [])
+      const allArchived = shopList.flatMap(s => s.archived_items || [])
       setItems(allItems)
+      setArchivedItems(allArchived)
     } catch (err) {
       console.error(err)
     } finally {
@@ -70,6 +76,15 @@ export default function ShopListings() {
     setModalOpen(true)
   }
 
+  const openRestore = (item) => {
+    setRestoreModal(item)
+    setRestoreForm({
+      quantity: 5,
+      pickup_start: item.pickup_start || '17:00',
+      pickup_end: item.pickup_end || '20:00',
+    })
+  }
+
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target
     setForm(f => ({ ...f, [name]: type === 'checkbox' ? checked : value }))
@@ -79,13 +94,10 @@ export default function ShopListings() {
     if (!form.name) { setError('Enter a name first'); return }
     setAiLoading(true)
     try {
-      const res = await api.post('/ai/describe', {
-        name: form.name,
-        category: 'Uzbek food',
-      })
+      const res = await api.post('/ai/describe', { name: form.name, category: 'Uzbek food' })
       setForm(f => ({ ...f, description: res.data.description }))
     } catch {
-      setError('AI service unavailable. Please add your Anthropic API key.')
+      setError('AI service unavailable.')
     } finally {
       setAiLoading(false)
     }
@@ -109,7 +121,7 @@ export default function ShopListings() {
         alert(`AI Suggestion: ${res.data.reasoning}\nDiscount: ${res.data.discount_percent}%`)
       }
     } catch {
-      setError('AI service unavailable. Please add your Anthropic API key.')
+      setError('AI service unavailable.')
     } finally {
       setAiPriceLoading(false)
     }
@@ -141,12 +153,39 @@ export default function ShopListings() {
     }
   }
 
+  const handleArchive = async (id) => {
+    if (!window.confirm('Archive this listing? It will be hidden from customers but you can restore it anytime.')) return
+    setArchiving(id)
+    try {
+      await api.put(`/food-items/${id}/archive`)
+      fetchShopsAndItems()
+    } catch (err) {
+      alert(err.response?.data?.error || 'Failed to archive')
+    } finally {
+      setArchiving(null)
+    }
+  }
+
+  const handleRestore = async (e) => {
+    e.preventDefault()
+    setRestoring(true)
+    try {
+      await api.put(`/food-items/${restoreModal.id}/restore`, restoreForm)
+      setRestoreModal(null)
+      fetchShopsAndItems()
+    } catch (err) {
+      alert(err.response?.data?.error || 'Failed to restore')
+    } finally {
+      setRestoring(false)
+    }
+  }
+
   const handleDelete = async (id) => {
-    if (!window.confirm('Delete this listing?')) return
+    if (!window.confirm('Permanently delete this listing? This cannot be undone.')) return
     setDeleting(id)
     try {
       await api.delete(`/food-items/${id}`)
-      setItems(items.filter(i => i.id !== id))
+      fetchShopsAndItems()
     } catch (err) {
       alert(err.response?.data?.error || 'Failed to delete')
     } finally {
@@ -161,22 +200,25 @@ export default function ShopListings() {
     } catch {}
   }
 
+  const visibleItems = items.filter(i => i.shop_id === selectedShopId)
+  const visibleArchived = archivedItems.filter(i => i.shop_id === selectedShopId)
+
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Listings</h1>
-          <p className="text-gray-500 text-sm mt-0.5">{items.length} item{items.length !== 1 ? 's' : ''} across all branches</p>
+          <p className="text-gray-500 text-sm mt-0.5">
+            {visibleItems.length} active · {visibleArchived.length} archived
+          </p>
         </div>
-        <button onClick={openCreate} className="btn-primary">
-          + Add listing
-        </button>
+        <button onClick={openCreate} className="btn-primary">+ Add listing</button>
       </div>
 
       {/* Branch selector */}
       {shops.length > 1 && (
-        <div className="flex gap-2 flex-wrap mb-6">
+        <div className="flex gap-2 flex-wrap mb-4">
           {shops.map(s => (
             <button
               key={s.id}
@@ -193,6 +235,29 @@ export default function ShopListings() {
         </div>
       )}
 
+      {/* Tab toggle */}
+      <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit mb-6">
+        <button
+          onClick={() => setActiveTab('active')}
+          className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+            activeTab === 'active' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          Active ({visibleItems.length})
+        </button>
+        <button
+          onClick={() => setActiveTab('archived')}
+          className={`px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-1.5 ${
+            activeTab === 'archived' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          Archived ({visibleArchived.length})
+          {visibleArchived.length > 0 && activeTab !== 'archived' && (
+            <span className="w-1.5 h-1.5 bg-amber-400 rounded-full" />
+          )}
+        </button>
+      </div>
+
       {/* Items Grid */}
       {loading ? (
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -206,77 +271,138 @@ export default function ShopListings() {
             </div>
           ))}
         </div>
-      ) : items.length === 0 ? (
-        <div className="text-center py-20">
-          <div className="text-6xl mb-4">🍽️</div>
-          <h2 className="text-xl font-semibold text-gray-700">No listings yet</h2>
-          <p className="text-gray-400 mt-2 mb-5">Create your first food listing to start selling</p>
-          <button onClick={openCreate} className="btn-primary">Create listing</button>
-        </div>
+      ) : activeTab === 'active' ? (
+        visibleItems.length === 0 ? (
+          <div className="text-center py-20">
+            <div className="text-6xl mb-4">🍽️</div>
+            <h2 className="text-xl font-semibold text-gray-700">No active listings</h2>
+            <p className="text-gray-400 mt-2 mb-5">Create your first food listing to start selling</p>
+            <button onClick={openCreate} className="btn-primary">Create listing</button>
+          </div>
+        ) : (
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {visibleItems.map(item => {
+              const discount = Math.round(((item.original_price - item.discounted_price) / item.original_price) * 100)
+              return (
+                <div key={item.id} className={`card transition-opacity ${!item.is_available ? 'opacity-60' : ''}`}>
+                  <div className="relative h-40 bg-gray-100 overflow-hidden">
+                    {item.image_url ? (
+                      <img src={item.image_url} alt={item.name} className="w-full h-full object-cover"
+                           onError={e => { e.target.style.display='none' }} />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-4xl">🍽️</div>
+                    )}
+                    <div className="absolute top-2 left-2">
+                      <span className="badge bg-primary-700 text-white text-xs font-bold">-{discount}%</span>
+                    </div>
+                    <div className="absolute top-2 right-2">
+                      <button
+                        onClick={() => toggleAvailable(item)}
+                        className={`text-xs px-2 py-1 rounded-full font-medium ${
+                          item.is_available ? 'bg-primary-600 text-white' : 'bg-gray-600 text-white'
+                        }`}
+                      >
+                        {item.is_available ? 'Active' : 'Hidden'}
+                      </button>
+                    </div>
+                    {item.quantity <= 2 && item.quantity > 0 && (
+                      <div className="absolute bottom-2 left-2">
+                        <span className="badge bg-red-500 text-white text-xs">Only {item.quantity} left!</span>
+                      </div>
+                    )}
+                  </div>
+                  <div className="p-4">
+                    <h3 className="font-semibold text-gray-900 line-clamp-1">{item.name}</h3>
+                    <p className="text-xs text-gray-400 mt-0.5 line-clamp-2">{item.description}</p>
+                    <div className="flex items-center gap-2 mt-2">
+                      <span className="text-primary-600 font-bold text-sm">{formatPrice(item.discounted_price)}</span>
+                      <span className="text-xs text-gray-400 line-through">{formatPrice(item.original_price)}</span>
+                    </div>
+                    <div className="flex items-center justify-between mt-1">
+                      <span className="text-xs text-gray-500">
+                        {item.pickup_start} – {item.pickup_end} · Qty: {item.quantity}
+                      </span>
+                    </div>
+                    <div className="flex gap-2 mt-3">
+                      <button onClick={() => openEdit(item)} className="flex-1 text-xs btn-secondary py-1.5">
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => handleArchive(item.id)}
+                        disabled={archiving === item.id}
+                        className="flex-1 text-xs text-amber-700 border border-amber-200 bg-amber-50 hover:bg-amber-100 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+                      >
+                        {archiving === item.id ? '…' : 'Archive'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )
       ) : (
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {items.filter(i => i.shop_id === selectedShopId).map(item => {
-            const discount = Math.round(((item.original_price - item.discounted_price) / item.original_price) * 100)
-            return (
-              <div key={item.id} className={`card transition-opacity ${!item.is_available ? 'opacity-60' : ''}`}>
-                <div className="relative h-40 bg-gray-100 overflow-hidden">
-                  {item.image_url ? (
-                    <img src={item.image_url} alt={item.name} className="w-full h-full object-cover"
-                         onError={e => { e.target.style.display='none' }} />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-4xl">🍽️</div>
-                  )}
-                  <div className="absolute top-2 left-2">
-                    <span className="badge bg-primary-700 text-white text-xs font-bold">-{discount}%</span>
+        /* Archived tab */
+        visibleArchived.length === 0 ? (
+          <div className="text-center py-20">
+            <div className="text-6xl mb-4">📦</div>
+            <h2 className="text-xl font-semibold text-gray-700">No archived listings</h2>
+            <p className="text-gray-400 mt-2">Items that sell out or get archived will appear here</p>
+          </div>
+        ) : (
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {visibleArchived.map(item => {
+              const discount = Math.round(((item.original_price - item.discounted_price) / item.original_price) * 100)
+              return (
+                <div key={item.id} className="card opacity-75 border-dashed">
+                  <div className="relative h-40 bg-gray-100 overflow-hidden grayscale">
+                    {item.image_url ? (
+                      <img src={item.image_url} alt={item.name} className="w-full h-full object-cover"
+                           onError={e => { e.target.style.display='none' }} />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-4xl">🍽️</div>
+                    )}
+                    <div className="absolute inset-0 bg-gray-900/40 flex items-center justify-center">
+                      <span className="bg-gray-800 text-white text-xs font-bold px-3 py-1 rounded-full">Archived</span>
+                    </div>
+                    <div className="absolute top-2 left-2">
+                      <span className="badge bg-gray-600 text-white text-xs font-bold">-{discount}%</span>
+                    </div>
                   </div>
-                  <div className="absolute top-2 right-2">
-                    <button
-                      onClick={() => toggleAvailable(item)}
-                      className={`text-xs px-2 py-1 rounded-full font-medium ${
-                        item.is_available
-                          ? 'bg-primary-600 text-white'
-                          : 'bg-gray-600 text-white'
-                      }`}
-                    >
-                      {item.is_available ? 'Active' : 'Hidden'}
-                    </button>
-                  </div>
-                </div>
-                <div className="p-4">
-                  <h3 className="font-semibold text-gray-900 line-clamp-1">{item.name}</h3>
-                  <p className="text-xs text-gray-400 mt-0.5 line-clamp-2">{item.description}</p>
-                  <div className="flex items-center gap-2 mt-2">
-                    <span className="text-primary-600 font-bold text-sm">{formatPrice(item.discounted_price)}</span>
-                    <span className="text-xs text-gray-400 line-through">{formatPrice(item.original_price)}</span>
-                  </div>
-                  <div className="flex items-center justify-between mt-1">
-                    <span className="text-xs text-gray-500">
-                      {item.pickup_start} – {item.pickup_end} · Qty: {item.quantity}
-                    </span>
-                  </div>
-                  <div className="flex gap-2 mt-3">
-                    <button
-                      onClick={() => openEdit(item)}
-                      className="flex-1 text-xs btn-secondary py-1.5"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      onClick={() => handleDelete(item.id)}
-                      disabled={deleting === item.id}
-                      className="flex-1 text-xs text-red-600 border border-red-200 bg-red-50 hover:bg-red-100 py-1.5 rounded-lg transition-colors disabled:opacity-50"
-                    >
-                      {deleting === item.id ? '…' : 'Delete'}
-                    </button>
+                  <div className="p-4">
+                    <h3 className="font-semibold text-gray-700 line-clamp-1">{item.name}</h3>
+                    <p className="text-xs text-gray-400 mt-0.5 line-clamp-2">{item.description}</p>
+                    <div className="flex items-center gap-2 mt-2">
+                      <span className="text-gray-500 font-bold text-sm">{formatPrice(item.discounted_price)}</span>
+                      <span className="text-xs text-gray-400 line-through">{formatPrice(item.original_price)}</span>
+                    </div>
+                    <p className="text-xs text-gray-400 mt-1">
+                      Last pickup: {item.pickup_start} – {item.pickup_end}
+                    </p>
+                    <div className="flex gap-2 mt-3">
+                      <button
+                        onClick={() => openRestore(item)}
+                        className="flex-1 text-xs text-primary-700 border border-primary-200 bg-primary-50 hover:bg-primary-100 py-1.5 rounded-lg transition-colors font-medium"
+                      >
+                        ↩ Restore
+                      </button>
+                      <button
+                        onClick={() => handleDelete(item.id)}
+                        disabled={deleting === item.id}
+                        className="flex-1 text-xs text-red-600 border border-red-200 bg-red-50 hover:bg-red-100 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+                      >
+                        {deleting === item.id ? '…' : 'Delete'}
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            )
-          })}
-        </div>
+              )
+            })}
+          </div>
+        )
       )}
 
-      {/* Modal - add listing / edit listing */}
+      {/* Create / Edit Modal */}
       {modalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
@@ -292,9 +418,7 @@ export default function ShopListings() {
             </div>
 
             {error && (
-              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
-                {error}
-              </div>
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">{error}</div>
             )}
 
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -304,8 +428,7 @@ export default function ShopListings() {
                   <select
                     value={selectedShopId || ''}
                     onChange={e => setSelectedShopId(Number(e.target.value))}
-                    className="input-field"
-                    required
+                    className="input-field" required
                   >
                     {shops.map(s => (
                       <option key={s.id} value={s.id}>
@@ -331,8 +454,7 @@ export default function ShopListings() {
                   </button>
                 </div>
                 <textarea name="description" value={form.description} onChange={handleChange}
-                  className="input-field resize-none" rows={3}
-                  placeholder="Describe your food item…" />
+                  className="input-field resize-none" rows={3} placeholder="Describe your food item…" />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -374,10 +496,7 @@ export default function ShopListings() {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Photo</label>
-                <ImageUpload
-                  value={form.image_url}
-                  onChange={(url) => setForm(f => ({ ...f, image_url: url }))}
-                />
+                <ImageUpload value={form.image_url} onChange={(url) => setForm(f => ({ ...f, image_url: url }))} />
               </div>
 
               <div className="flex items-center gap-2">
@@ -388,11 +507,58 @@ export default function ShopListings() {
               </div>
 
               <div className="flex gap-3 pt-2">
-                <button type="button" onClick={() => setModalOpen(false)} className="btn-secondary flex-1">
-                  Cancel
-                </button>
+                <button type="button" onClick={() => setModalOpen(false)} className="btn-secondary flex-1">Cancel</button>
                 <button type="submit" disabled={saving} className="btn-primary flex-1">
                   {saving ? 'Saving…' : editItem ? 'Save changes' : 'Create listing'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Restore Modal */}
+      {restoreModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-sm">
+            <h2 className="text-lg font-bold text-gray-900 mb-1">Restore listing</h2>
+            <p className="text-sm text-gray-500 mb-4">{restoreModal.name}</p>
+
+            <form onSubmit={handleRestore} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">New quantity *</label>
+                <input
+                  type="number"
+                  min={1}
+                  value={restoreForm.quantity}
+                  onChange={e => setRestoreForm(f => ({ ...f, quantity: parseInt(e.target.value) }))}
+                  className="input-field"
+                  required
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Pickup start</label>
+                  <input type="time" value={restoreForm.pickup_start}
+                    onChange={e => setRestoreForm(f => ({ ...f, pickup_start: e.target.value }))}
+                    className="input-field" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Pickup end</label>
+                  <input type="time" value={restoreForm.pickup_end}
+                    onChange={e => setRestoreForm(f => ({ ...f, pickup_end: e.target.value }))}
+                    className="input-field" />
+                </div>
+              </div>
+
+              <div className="bg-primary-50 rounded-lg p-3 text-xs text-primary-700">
+                The listing will be restored as active with the same name, description, prices, and photo. Just set the new quantity and pickup window.
+              </div>
+
+              <div className="flex gap-3">
+                <button type="button" onClick={() => setRestoreModal(null)} className="btn-secondary flex-1">Cancel</button>
+                <button type="submit" disabled={restoring} className="btn-primary flex-1">
+                  {restoring ? 'Restoring…' : '↩ Restore listing'}
                 </button>
               </div>
             </form>

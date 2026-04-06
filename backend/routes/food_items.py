@@ -1,16 +1,18 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from models import db, User, Shop, FoodItem
+from models import db, User, Shop, FoodItem, Order, Review
 
 food_bp = Blueprint("food_items", __name__)
 
 
 @food_bp.route("/", methods=["GET"])
 def list_items():
-    query = FoodItem.query.filter_by(is_available=True)
+    # Public browse: only available, non-archived items
+    query = FoodItem.query.filter_by(is_available=True, is_archived=False)
 
     shop_id = request.args.get("shop_id")
     search = request.args.get("search")
+    category = request.args.get("category")
 
     if shop_id:
         query = query.filter_by(shop_id=int(shop_id))
@@ -21,6 +23,8 @@ def list_items():
                 FoodItem.description.ilike(f"%{search}%"),
             )
         )
+    if category:
+        query = query.join(Shop).filter(Shop.category.ilike(category))
 
     items = query.order_by(FoodItem.created_at.desc()).all()
     return jsonify([item.to_dict() for item in items])
@@ -31,9 +35,13 @@ def get_item(item_id):
     item = FoodItem.query.get_or_404(item_id)
     data = item.to_dict()
     data["shop"] = item.shop.to_dict() if item.shop else None
-    # include reviews for this item's shop
-    if item.shop:
-        data["reviews"] = [r.to_dict() for r in item.shop.reviews]
+
+    # Reviews specific to this food item
+    item_reviews = Review.query.filter_by(food_item_id=item_id).order_by(Review.created_at.desc()).all()
+    data["reviews"] = [r.to_dict() for r in item_reviews]
+    data["review_count"] = len(item_reviews)
+    data["avg_rating"] = round(sum(r.rating for r in item_reviews) / len(item_reviews), 1) if item_reviews else None
+
     return jsonify(data)
 
 
@@ -106,6 +114,42 @@ def update_item(item_id):
     return jsonify(item.to_dict())
 
 
+@food_bp.route("/<int:item_id>/archive", methods=["PUT"])
+@jwt_required()
+def archive_item(item_id):
+    user_id = int(get_jwt_identity())
+    item = FoodItem.query.get_or_404(item_id)
+    user = User.query.get_or_404(user_id)
+    shop_ids = [s.id for s in user.shops]
+    if user.role != "shop" or item.shop_id not in shop_ids:
+        return jsonify({"error": "Unauthorized"}), 403
+
+    item.is_archived = True
+    item.is_available = False
+    db.session.commit()
+    return jsonify(item.to_dict())
+
+
+@food_bp.route("/<int:item_id>/restore", methods=["PUT"])
+@jwt_required()
+def restore_item(item_id):
+    user_id = int(get_jwt_identity())
+    item = FoodItem.query.get_or_404(item_id)
+    user = User.query.get_or_404(user_id)
+    shop_ids = [s.id for s in user.shops]
+    if user.role != "shop" or item.shop_id not in shop_ids:
+        return jsonify({"error": "Unauthorized"}), 403
+
+    data = request.get_json() or {}
+    item.is_archived = False
+    item.is_available = True
+    item.quantity = int(data.get("quantity", 5))
+    if "pickup_start" in data: item.pickup_start = data["pickup_start"]
+    if "pickup_end" in data:   item.pickup_end   = data["pickup_end"]
+    db.session.commit()
+    return jsonify(item.to_dict())
+
+
 @food_bp.route("/<int:item_id>", methods=["DELETE"])
 @jwt_required()
 def delete_item(item_id):
@@ -116,6 +160,12 @@ def delete_item(item_id):
     shop_ids = [s.id for s in user.shops]
     if user.role != "shop" or item.shop_id not in shop_ids:
         return jsonify({"error": "Unauthorized"}), 403
+
+    # Delete related reviews and orders first to avoid FK constraint errors
+    orders = Order.query.filter_by(food_item_id=item_id).all()
+    for order in orders:
+        Review.query.filter_by(order_id=order.id).delete()
+    Order.query.filter_by(food_item_id=item_id).delete()
 
     db.session.delete(item)
     db.session.commit()

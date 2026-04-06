@@ -118,28 +118,40 @@ def create_order():
 
     # Reduce available quantity
     item.quantity -= quantity
-    if item.quantity == 0:
-        item.is_available = False
 
     db.session.add(order)
-    db.session.flush()  # get order.id before commit
+    db.session.flush()  # get order.id / order_ref before commit
 
-    # Notify shop owner
     shop_owner_id = item.shop.owner.id if item.shop and item.shop.owner else None
+    ref = order.order_ref or f"#{order.id}"
+
+    # Notify shop owner of new order
     if shop_owner_id:
         create_notification(
             shop_owner_id,
-            f"New order #{order.id} — {item.name} × {quantity}",
+            f"New order {ref} — {item.name} × {quantity}",
             link="/shop-orders",
         )
 
-    # Low stock warning for shop owner
-    if shop_owner_id and item.quantity <= 2 and item.quantity > 0:
-        create_notification(
-            shop_owner_id,
-            f"Low stock: '{item.name}' has only {item.quantity} left",
-            link="/listings",
-        )
+    # Auto-archive + sold-out notification when quantity hits 0
+    if item.quantity <= 0:
+        item.quantity = 0
+        item.is_available = False
+        item.is_archived = True
+        if shop_owner_id:
+            create_notification(
+                shop_owner_id,
+                f"'{item.name}' is sold out and has been archived. Restore it anytime to relist.",
+                link="/listings",
+            )
+    # Low stock warning (2 or fewer left, not yet zero)
+    elif item.quantity <= 2:
+        if shop_owner_id:
+            create_notification(
+                shop_owner_id,
+                f"Low stock: '{item.name}' has only {item.quantity} portion{'s' if item.quantity > 1 else ''} left.",
+                link="/listings",
+            )
 
     db.session.commit()
     return jsonify(order.to_dict()), 201
@@ -169,10 +181,11 @@ def update_status(order_id):
     order.status = new_status
 
     # Notify customer
+    ref = order.order_ref or f"#{order.id}"
     messages = {
-        "confirmed":  f"Your order #{order.id} has been confirmed! Get ready for pickup.",
-        "picked_up":  f"Order #{order.id} marked as picked up. Enjoy your meal!",
-        "cancelled":  f"Your order #{order.id} was cancelled by the shop.",
+        "confirmed":  f"Your order {ref} has been confirmed! Get ready for pickup.",
+        "picked_up":  f"Order {ref} marked as picked up. Enjoy your meal!",
+        "cancelled":  f"Your order {ref} was cancelled by the shop.",
     }
     msg = messages.get(new_status)
     if msg:
@@ -198,8 +211,26 @@ def cancel_order(order_id):
     if order.status == "pending":
         item = FoodItem.query.get(order.food_item_id)
         if item:
+            was_sold_out = item.quantity == 0
             item.quantity += order.quantity
-            item.is_available = True
+
+            # Un-archive only if the item was archived due to being sold out
+            # (quantity was 0), not if the shop manually archived it
+            if was_sold_out and item.is_archived:
+                item.is_archived = False
+                item.is_available = True
+            elif not item.is_archived:
+                item.is_available = True
+
+            # Notify shop owner about cancellation and stock restore
+            shop_owner_id = item.shop.owner.id if item.shop and item.shop.owner else None
+            if shop_owner_id:
+                ref = order.order_ref or f"#{order.id}"
+                create_notification(
+                    shop_owner_id,
+                    f"Order {ref} cancelled by customer — '{item.name}' · {order.quantity} portion{'s' if order.quantity > 1 else ''} returned to stock.",
+                    link="/shop-orders",
+                )
 
     order.status = "cancelled"
     db.session.commit()
@@ -230,6 +261,7 @@ def create_review(order_id):
         order_id=order_id,
         customer_id=user_id,
         shop_id=order.food_item.shop_id,
+        food_item_id=order.food_item_id,
         rating=int(rating),
         comment=data.get("comment", ""),
     )

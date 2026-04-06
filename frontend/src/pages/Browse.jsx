@@ -3,6 +3,7 @@ import { useSearchParams, Navigate, useNavigate, Link } from 'react-router-dom'
 import api from '../api/axios'
 import FoodCard from '../components/FoodCard'
 import ShopCard from '../components/ShopCard'
+import ShopsMap from '../components/ShopsMap'
 import { useAuth } from '../context/AuthContext'
 import { haversineKm } from '../utils/distance'
 
@@ -331,6 +332,7 @@ export default function Browse() {
           {[
             { key: 'food', label: `Food items (${visibleItems.length})` },
             { key: 'shops', label: `Shops (${sortedShops.length})` },
+            { key: 'map', label: '📍 Map' },
           ].map(tab => (
             <button
               key={tab.key}
@@ -359,6 +361,8 @@ export default function Browse() {
             </div>
           ))}
         </div>
+      ) : activeTab === 'map' ? (
+        <ShopsMap shops={sortedShops} foodItems={foodItems} userLocation={userLocation} />
       ) : (activeTab === 'food' || selectedShop) ? (
         visibleItems.length === 0 ? (
           <EmptyState

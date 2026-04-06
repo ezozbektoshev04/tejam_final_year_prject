@@ -1,50 +1,23 @@
 import { useEffect, useRef } from 'react'
+import { loadYandexMaps, hasYandexKey } from '../utils/yandexMaps'
 
-const YANDEX_MAPS_API_KEY = import.meta.env.VITE_YANDEX_MAPS_API_KEY
-const hasKey = YANDEX_MAPS_API_KEY && YANDEX_MAPS_API_KEY !== 'your-yandex-maps-api-key-here'
-
-let scriptLoading = false
-const callbacks = []
-
-function getYmaps() {
-  return /** @type {any} */ (window).ymaps
-}
-
-function loadYandexMaps() {
-  return new Promise((resolve, reject) => {
-    const ymaps = getYmaps()
-    if (ymaps) {
-      ymaps.ready(() => resolve(ymaps))
-      return
-    }
-    callbacks.push({ resolve, reject })
-    if (scriptLoading) return
-    scriptLoading = true
-    const script = document.createElement('script')
-    script.src = `https://api-maps.yandex.ru/2.1/?apikey=${YANDEX_MAPS_API_KEY}&lang=ru_RU`
-    script.onload = () => {
-      getYmaps().ready(() => {
-        const y = getYmaps()
-        callbacks.forEach(cb => cb.resolve(y))
-        callbacks.length = 0
-      })
-    }
-    script.onerror = (e) => {
-      callbacks.forEach(cb => cb.reject(e))
-      callbacks.length = 0
-    }
-    document.head.appendChild(script)
-  })
-}
+const hasKey = hasYandexKey
 
 export default function MapEmbed({ address, shopName, city = 'Tashkent', lat, lng }) {
   const mapRef = useRef(null)
   const mapInstanceRef = useRef(null)
 
   const query = `${shopName ? shopName + ', ' : ''}${address || ''}, ${city}, Uzbekistan`
-  const encodedQuery = encodeURIComponent(query)
-  const directionsUrl = `https://yandex.com/maps/?rtext=~${encodedQuery}&rtt=auto`
-  const searchUrl = `https://yandex.com/maps/?text=${encodedQuery}`
+  const hasCoords = lat && lng
+
+  // Use exact coordinates when available, fall back to text search
+  const directionsUrl = hasCoords
+    ? `https://yandex.com/maps/?rtext=~${lat},${lng}&rtt=auto`
+    : `https://yandex.com/maps/?rtext=~${encodeURIComponent(query)}&rtt=auto`
+
+  const searchUrl = hasCoords
+    ? `https://yandex.com/maps/?ll=${lng},${lat}&z=16&pt=${lng},${lat},pm2rdm`
+    : `https://yandex.com/maps/?text=${encodeURIComponent(query)}`
 
   useEffect(() => {
     if (!hasKey || !mapRef.current) return

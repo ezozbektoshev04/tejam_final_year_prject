@@ -1,8 +1,14 @@
 import uuid
+import random
+import string
 from datetime import datetime
 from flask_sqlalchemy import SQLAlchemy
 
 db = SQLAlchemy()
+
+def _gen_order_ref():
+    chars = string.ascii_uppercase + string.digits
+    return 'TJ-' + ''.join(random.choices(chars, k=6))
 
 
 class User(db.Model):
@@ -66,7 +72,8 @@ class Shop(db.Model):
             "lng": self.lng,
         }
         if include_items:
-            data["food_items"] = [item.to_dict() for item in self.food_items if item.is_available]
+            data["food_items"] = [item.to_dict() for item in self.food_items if not item.is_archived]
+            data["archived_items"] = [item.to_dict() for item in self.food_items if item.is_archived]
         return data
 
 
@@ -84,6 +91,7 @@ class FoodItem(db.Model):
     pickup_end = db.Column(db.String(10))    # e.g. "20:00"
     image_url = db.Column(db.String(500))
     is_available = db.Column(db.Boolean, default=True)
+    is_archived = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     orders = db.relationship("Order", backref="food_item", lazy=True)
@@ -101,6 +109,7 @@ class FoodItem(db.Model):
             "pickup_end": self.pickup_end,
             "image_url": self.image_url,
             "is_available": self.is_available,
+            "is_archived": self.is_archived,
             "created_at": self.created_at.isoformat(),
             "shop_name": self.shop.name if self.shop else None,
             "shop_city": self.shop.city if self.shop else None,
@@ -120,6 +129,7 @@ class Order(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     notes = db.Column(db.Text)
     pickup_token = db.Column(db.String(36), unique=True, default=lambda: str(uuid.uuid4()))
+    order_ref = db.Column(db.String(12), unique=True, default=lambda: _gen_order_ref())
 
     review = db.relationship("Review", backref="order", uselist=False, lazy=True)
 
@@ -143,6 +153,8 @@ class Order(db.Model):
             "payment_method": self.payment_method or "cash",
             "created_at": self.created_at.isoformat(),
             "notes": self.notes,
+            "order_ref": self.order_ref or f"TJ-{self.id:06d}",
+            "review": self.review.to_dict() if self.review else None,
         }
 
 
@@ -174,6 +186,7 @@ class Review(db.Model):
     order_id = db.Column(db.Integer, db.ForeignKey("orders.id"), nullable=False)
     customer_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
     shop_id = db.Column(db.Integer, db.ForeignKey("shops.id"), nullable=False)
+    food_item_id = db.Column(db.Integer, db.ForeignKey("food_items.id"), nullable=True)
     rating = db.Column(db.Integer, nullable=False)  # 1-5
     comment = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -185,6 +198,7 @@ class Review(db.Model):
             "customer_id": self.customer_id,
             "customer_name": self.reviewer.name if self.reviewer else None,
             "shop_id": self.shop_id,
+            "food_item_id": self.food_item_id,
             "rating": self.rating,
             "comment": self.comment,
             "created_at": self.created_at.isoformat(),

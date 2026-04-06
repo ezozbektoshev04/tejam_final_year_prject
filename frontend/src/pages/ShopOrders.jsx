@@ -217,7 +217,7 @@ export default function ShopOrders() {
           <input
             type="text"
             className="input-field text-sm flex-1"
-            placeholder="Search by order ID or item name…"
+            placeholder="Search by order ref or item name…"
             value={searchInput}
             onChange={e => setSearchInput(e.target.value)}
           />
@@ -272,7 +272,7 @@ export default function ShopOrders() {
                         className="hover:bg-gray-50 cursor-pointer"
                         onClick={() => setExpandedId(isExpanded ? null : order.id)}
                       >
-                        <td className="px-4 py-3 text-gray-400">#{order.id}</td>
+                        <td className="px-4 py-3 text-gray-500 font-mono text-xs">{order.order_ref}</td>
                         <td className="px-4 py-3 text-gray-500 whitespace-nowrap">
                           {new Date(order.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                           {' '}
@@ -323,8 +323,8 @@ export default function ShopOrders() {
                                 <p className="text-gray-800">{order.pickup_start || '—'} – {order.pickup_end || '—'}</p>
                               </div>
                               <div>
-                                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Pickup token</p>
-                                <p className="font-mono text-xs text-gray-600 break-all">{order.pickup_token}</p>
+                                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Order ref</p>
+                                <p className="font-mono text-sm font-bold text-gray-800">{order.order_ref}</p>
                               </div>
                               {order.notes && (
                                 <div>

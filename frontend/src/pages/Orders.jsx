@@ -172,8 +172,8 @@ export default function Orders() {
                   <div className="border-t border-gray-100 p-4 bg-gray-50">
                     <div className="grid grid-cols-2 gap-4 text-sm">
                       <div>
-                        <span className="text-gray-500">Order ID</span>
-                        <p className="font-medium">#{order.id}</p>
+                        <span className="text-gray-500">Order ref</span>
+                        <p className="font-medium font-mono">{order.order_ref}</p>
                       </div>
                       <div>
                         <span className="text-gray-500">Status</span>
@@ -274,14 +274,17 @@ export default function Orders() {
                       )}
                       {order.status === 'picked_up' && !order.review && (
                         <button
-                          onClick={() => setReviewModal(order)}
+                          onClick={() => { setReviewModal(order); setReviewForm({ rating: 5, comment: '' }) }}
                           className="text-sm text-primary-600 border border-primary-200 bg-primary-50 hover:bg-primary-100 px-3 py-1.5 rounded-lg transition-colors"
                         >
                           Leave a review ⭐
                         </button>
                       )}
                       {order.status === 'picked_up' && order.review && (
-                        <span className="text-sm text-gray-400">✓ Reviewed</span>
+                        <div className="flex items-center gap-1.5 text-sm text-gray-500">
+                          <span>✓ Reviewed</span>
+                          <span className="text-yellow-400">{'★'.repeat(order.review.rating)}</span>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -299,7 +302,7 @@ export default function Orders() {
           <div className="bg-white rounded-2xl p-6 w-full max-w-xs text-center">
             <h2 className="text-lg font-bold text-gray-900 mb-1">Your pickup QR code</h2>
             <p className="text-sm text-gray-500 mb-1">{qrOrder.food_item_name}</p>
-            <p className="text-xs text-gray-400 mb-5">{qrOrder.shop_name} · Order #{qrOrder.id}</p>
+            <p className="text-xs text-gray-400 mb-5">{qrOrder.shop_name} · {qrOrder.order_ref}</p>
 
             <div className="flex justify-center mb-5">
               <div className="p-3 bg-white border-2 border-gray-200 rounded-xl inline-block">
@@ -335,7 +338,8 @@ export default function Orders() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl p-6 w-full max-w-md">
             <h2 className="text-lg font-bold text-gray-900 mb-1">Leave a review</h2>
-            <p className="text-sm text-gray-500 mb-4">{reviewModal.shop_name}</p>
+            <p className="text-sm font-medium text-gray-700">{reviewModal.food_item_name}</p>
+            <p className="text-sm text-gray-400 mb-4">{reviewModal.shop_name}</p>
 
             <form onSubmit={handleReviewSubmit}>
               <div className="mb-4">

@@ -340,11 +340,22 @@ export default function FoodDetail() {
       </div>
 
       {/* Reviews */}
-      {item.reviews && item.reviews.length > 0 && (
-        <div className="mt-10">
-          <h2 className="text-xl font-bold text-gray-900 mb-5">
-            Reviews for {item.shop?.name}
+      <div className="mt-10">
+        <div className="flex items-center gap-4 mb-5">
+          <h2 className="text-xl font-bold text-gray-900">
+            Reviews for this item
           </h2>
+          {item.review_count > 0 && (
+            <div className="flex items-center gap-2">
+              <StarRow rating={Math.round(item.avg_rating)} />
+              <span className="text-sm text-gray-500">
+                {item.avg_rating} · {item.review_count} review{item.review_count !== 1 ? 's' : ''}
+              </span>
+            </div>
+          )}
+        </div>
+
+        {item.reviews && item.reviews.length > 0 ? (
           <div className="space-y-4">
             {item.reviews.map(review => (
               <div key={review.id} className="card p-4">
@@ -368,8 +379,14 @@ export default function FoodDetail() {
               </div>
             ))}
           </div>
-        </div>
-      )}
+        ) : (
+          <div className="text-center py-10 bg-gray-50 rounded-xl border border-gray-100">
+            <div className="text-4xl mb-2">⭐</div>
+            <p className="text-gray-500 text-sm">No reviews yet for this item.</p>
+            <p className="text-gray-400 text-xs mt-1">Be the first to order and leave a review!</p>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
