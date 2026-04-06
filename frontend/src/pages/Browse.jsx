@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
-import { useSearchParams, Navigate, useNavigate } from 'react-router-dom'
+import { useSearchParams, Navigate, useNavigate, Link } from 'react-router-dom'
 import api from '../api/axios'
 import FoodCard from '../components/FoodCard'
 import ShopCard from '../components/ShopCard'
@@ -35,6 +35,9 @@ export default function Browse() {
   const [loading, setLoading] = useState(true)
   const [userLocation, setUserLocation] = useState(null) // { lat, lng }
   const [locating, setLocating] = useState(false)
+  const [recommendations, setRecommendations] = useState([]) // { id, reason }
+  const [recItems, setRecItems] = useState([])              // full FoodItem objects
+  const [recLoading, setRecLoading] = useState(false)
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -71,6 +74,24 @@ export default function Browse() {
     return () => clearTimeout(timeout)
   }, [fetchData])
 
+  // Fetch AI recommendations for logged-in customers (once on mount)
+  useEffect(() => {
+    if (user?.role !== 'customer') return
+    setRecLoading(true)
+    api.get('/ai/recommendations')
+      .then(res => {
+        const recs = res.data.recommendations || []
+        setRecommendations(recs)
+        // fetch the actual food items for the recommended IDs
+        return Promise.all(recs.map(r => api.get(`/food-items/${r.id}`).catch(() => null)))
+      })
+      .then(results => {
+        setRecItems(results.filter(Boolean).map(r => r.data))
+      })
+      .catch(() => {})
+      .finally(() => setRecLoading(false))
+  }, [user])
+
   // Shop users should not access Browse
   if (user?.role === 'shop') return <Navigate to="/dashboard" replace />
 
@@ -81,17 +102,39 @@ export default function Browse() {
 
   const clearShopFilter = () => navigate('/browse')
 
+  // Tashkent city center fallback
+  const TASHKENT_CENTER = { lat: 41.2995, lng: 69.2401 }
+
+  const applyLocation = (loc) => {
+    setUserLocation(loc)
+    setLocating(false)
+    setActiveTab('shops')
+  }
+
   const handleNearMe = () => {
-    if (!navigator.geolocation) return
+    // If already active, clear it
+    if (userLocation) {
+      setUserLocation(null)
+      return
+    }
+
+    if (!navigator.geolocation) {
+      // No geolocation support — use city center
+      applyLocation(TASHKENT_CENTER)
+      return
+    }
+
     setLocating(true)
+
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude })
-        setLocating(false)
-        setActiveTab('shops')
+        applyLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude })
       },
-      () => setLocating(false),
-      { timeout: 8000 }
+      () => {
+        // Any error (denied, unavailable, timeout) → fall back to city center
+        applyLocation(TASHKENT_CENTER)
+      },
+      { timeout: 10000, enableHighAccuracy: false, maximumAge: 60000 }
     )
   }
 
@@ -147,6 +190,69 @@ export default function Browse() {
           </div>
         )}
       </div>
+
+      {/* AI Recommendations — only for logged-in customers, not when filtering by shop */}
+      {user?.role === 'customer' && !selectedShop && (recLoading || recItems.length > 0) && (
+        <div className="mb-6">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-lg">✨</span>
+            <h2 className="font-semibold text-gray-900 text-sm">Recommended for you</h2>
+            <span className="text-xs text-gray-400">based on your orders</span>
+          </div>
+          {recLoading ? (
+            <div className="flex gap-4 overflow-x-auto pb-1">
+              {[1,2,3].map(i => (
+                <div key={i} className="card animate-pulse flex-shrink-0 w-56">
+                  <div className="h-32 bg-gray-200" />
+                  <div className="p-3 space-y-2">
+                    <div className="h-3 bg-gray-200 rounded w-3/4" />
+                    <div className="h-3 bg-gray-200 rounded w-1/2" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="flex gap-4 overflow-x-auto pb-1">
+              {recItems.map(item => {
+                const rec = recommendations.find(r => r.id === item.id)
+                const discount = Math.round(((item.original_price - item.discounted_price) / item.original_price) * 100)
+                return (
+                  <Link
+                    key={item.id}
+                    to={`/food/${item.id}`}
+                    className="card flex-shrink-0 w-56 hover:shadow-md transition-shadow"
+                  >
+                    <div className="relative h-32 bg-gray-100 overflow-hidden">
+                      {item.image_url ? (
+                        <img src={item.image_url} alt={item.name}
+                          className="w-full h-full object-cover"
+                          onError={e => { e.target.style.display = 'none' }} />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-3xl">🍽️</div>
+                      )}
+                      <span className="absolute top-2 left-2 badge bg-primary-700 text-white text-xs font-bold">
+                        -{discount}%
+                      </span>
+                    </div>
+                    <div className="p-3">
+                      <p className="font-semibold text-gray-900 text-sm line-clamp-1">{item.name}</p>
+                      <p className="text-xs text-gray-400 mt-0.5 line-clamp-1">{item.shop_name}</p>
+                      <p className="text-primary-600 font-bold text-sm mt-1">
+                        {new Intl.NumberFormat('uz-UZ').format(Math.round(item.discounted_price))} UZS
+                      </p>
+                      {rec?.reason && (
+                        <p className="text-xs text-primary-700 bg-primary-50 rounded px-2 py-1 mt-2 line-clamp-2">
+                          ✨ {rec.reason}
+                        </p>
+                      )}
+                    </div>
+                  </Link>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Search & Filters — hide when viewing a specific shop */}
       {!selectedShop && (

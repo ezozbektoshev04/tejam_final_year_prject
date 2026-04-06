@@ -149,6 +149,8 @@ export default function FoodDetail() {
                 shopName={item.shop.name}
                 address={item.shop.address}
                 city={item.shop.city}
+                lat={item.shop.lat}
+                lng={item.shop.lng}
               />
             </>
           )}

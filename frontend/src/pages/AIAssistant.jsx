@@ -4,17 +4,17 @@ import api from '../api/axios'
 import ReactMarkdown from 'react-markdown'
 
 const CUSTOMER_SUGGESTIONS = [
-  'What food is available in Tashkent today?',
-  'What are the best deals right now?',
-  'Tell me about Uzbek street food',
-  'How does Tejam work?',
+  "What's the cheapest deal today?",
+  'Show me the biggest discounts right now',
+  'What bakery items are available?',
+  'What are my recent orders?',
 ]
 
 const SHOP_SUGGESTIONS = [
-  'How should I price my surplus samsa?',
-  'Tips for reducing food waste in my bakery',
-  'What discount percentage attracts most customers?',
-  'What are my pending orders?',
+  "How many orders did I get today?",
+  "What's my revenue this week?",
+  'Which of my items is selling best?',
+  'Do I have any pending orders?',
 ]
 
 function TypingIndicator() {
@@ -47,18 +47,35 @@ function MessageContent({ content }) {
 export default function AIAssistant() {
   const { user } = useAuth()
   const isShop = user?.role === 'shop'
+  const storageKey = `chat_history_${user?.id}`
 
   const initialMessage = {
     role: 'assistant',
     content: isShop
-      ? `Hello ${user?.name}! I'm Tejam's AI assistant. I can help you write food descriptions, suggest prices, check your listings and orders, and give tips on reducing food waste. What would you like help with today?`
-      : `Hello ${user?.name}! I'm Tejam's AI assistant. I can help you find the best food deals in Uzbekistan, tell you about local cuisine, and answer questions about how Tejam works. What can I help you with?`,
+      ? `Hello ${user?.name}! I'm Tejam's AI assistant. I have access to your live listings, orders, and sales data — ask me anything. Try: *"How many orders did I get today?"* or *"What are my pending orders?"*`
+      : `Hello ${user?.name}! I'm Tejam's AI assistant. I can see all current listings and deals on Tejam. Try: *"What's the cheapest deal today?"* or *"Show me the best discounts right now."*`,
   }
 
-  const [messages, setMessages] = useState([initialMessage])
+  const [messages, setMessages] = useState(() => {
+    try {
+      const saved = localStorage.getItem(`chat_history_${user?.id}`)
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        return parsed.length > 0 ? parsed : [initialMessage]
+      }
+    } catch {}
+    return [initialMessage]
+  })
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const messagesEndRef = useRef(null)
+
+  // Persist messages to localStorage whenever they change
+  useEffect(() => {
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(messages))
+    } catch {}
+  }, [messages, storageKey])
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -100,6 +117,7 @@ export default function AIAssistant() {
   }
 
   const handleClear = () => {
+    localStorage.removeItem(storageKey)
     setMessages([initialMessage])
     setInput('')
   }

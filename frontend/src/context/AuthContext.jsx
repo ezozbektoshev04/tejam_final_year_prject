@@ -53,6 +53,14 @@ export function AuthProvider({ children }) {
   }, [])
 
   const logout = useCallback(() => {
+    // Clear chat history for this user
+    const stored = localStorage.getItem('user')
+    if (stored) {
+      try {
+        const u = JSON.parse(stored)
+        localStorage.removeItem(`chat_history_${u.id}`)
+      } catch {}
+    }
     localStorage.removeItem('access_token')
     localStorage.removeItem('user')
     setUser(null)

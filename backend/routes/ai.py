@@ -19,10 +19,104 @@ def get_gemini_client():
 
 def gemini_generate(client, prompt):
     response = client.models.generate_content(
-        model="gemini-2.5-flash",
+        model="gemini-2.0-flash",
         contents=prompt,
     )
     return response.text.strip()
+
+
+@ai_bp.route("/recommendations", methods=["GET"])
+@jwt_required()
+def get_recommendations():
+    user_id = int(get_jwt_identity())
+    user = User.query.get_or_404(user_id)
+
+    if user.role != "customer":
+        return jsonify({"error": "Only customers can get recommendations"}), 403
+
+    # Get customer's order history
+    past_orders = (
+        Order.query.filter_by(customer_id=user_id)
+        .filter(Order.status.in_(["confirmed", "picked_up"]))
+        .order_by(Order.created_at.desc())
+        .limit(10)
+        .all()
+    )
+
+    # Get all currently available listings
+    available_items = FoodItem.query.filter_by(is_available=True).limit(30).all()
+
+    if not available_items:
+        return jsonify({"recommendations": []})
+
+    client = get_gemini_client()
+
+    # If no order history or no AI, return top 3 by discount
+    if not past_orders or not client:
+        top = sorted(
+            available_items,
+            key=lambda i: (i.original_price - i.discounted_price) / i.original_price,
+            reverse=True
+        )[:3]
+        return jsonify({
+            "recommendations": [
+                {"id": i.id, "reason": "Top discount available today"} for i in top
+            ]
+        })
+
+    # Build context for Gemini
+    history_text = "\n".join([
+        f"- {o.food_item.name} from {o.food_item.shop.name if o.food_item and o.food_item.shop else '?'} "
+        f"({o.food_item.shop.category if o.food_item and o.food_item.shop else '?'})"
+        for o in past_orders if o.food_item
+    ])
+
+    listings_text = "\n".join([
+        f"ID:{item.id} | {item.name} | {item.shop.name if item.shop else '?'} | "
+        f"{item.shop.category if item.shop else '?'} | "
+        f"{int(item.discounted_price):,} UZS (was {int(item.original_price):,})"
+        for item in available_items
+    ])
+
+    prompt = f"""You are a personalized food recommendation engine for Tejam, a food surplus marketplace in Uzbekistan.
+
+Customer's past orders (what they've bought before):
+{history_text}
+
+Currently available listings:
+{listings_text}
+
+Based on the customer's taste preferences shown in their order history, pick the 3 best matching items from the available listings.
+Consider: similar food types, similar shops/brands, similar price range, complementary foods.
+
+Respond in JSON only:
+[
+  {{"id": <item_id>, "reason": "<one short sentence why this matches their taste>"}},
+  {{"id": <item_id>, "reason": "<one short sentence>"}},
+  {{"id": <item_id>, "reason": "<one short sentence>"}}
+]
+
+Return only valid JSON array, no markdown, no extra text."""
+
+    try:
+        raw = gemini_generate(client, prompt)
+        clean = raw.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+        result = json.loads(clean)
+        # Validate IDs exist in available items
+        valid_ids = {i.id for i in available_items}
+        result = [r for r in result if r.get("id") in valid_ids]
+        return jsonify({"recommendations": result[:3]})
+    except Exception:
+        top = sorted(
+            available_items,
+            key=lambda i: (i.original_price - i.discounted_price) / i.original_price,
+            reverse=True
+        )[:3]
+        return jsonify({
+            "recommendations": [
+                {"id": i.id, "reason": "Top discount available today"} for i in top
+            ]
+        })
 
 
 @ai_bp.route("/describe", methods=["POST"])
@@ -134,37 +228,109 @@ Return only valid JSON, no extra text or markdown."""
 
 
 def _build_live_context(user):
-    """Build a context string with the user's real data from the DB."""
+    """Build rich live context injected into every chat prompt."""
+    from datetime import datetime, timedelta
     lines = []
+    today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    week_start  = today_start - timedelta(days=today_start.weekday())
+
+    # ── SHOP OWNER ──────────────────────────────────────────────────────────
     if user.role == "shop" and user.shops:
-        lines.append(f"Shop owner of: {', '.join(s.name for s in user.shops)} ({len(user.shops)} branches)")
+        branch_names = ", ".join(f"{s.name} ({s.address.split(',')[0] if s.address else 'branch'})" for s in user.shops)
+        lines.append(f"Shop owner managing {len(user.shops)} branch(es): {branch_names}")
+
         food_ids = [item.id for s in user.shops for item in s.food_items]
         listings = FoodItem.query.filter(FoodItem.id.in_(food_ids)).all() if food_ids else []
-        if listings:
-            lines.append("Current listings:")
-            for item in listings[:8]:
-                status = "available" if item.is_available else "hidden"
-                lines.append(f"  - {item.name}: {int(item.discounted_price):,} UZS (was {int(item.original_price):,}) qty={item.quantity} [{status}]")
-        low_stock = [i for i in listings if i.quantity <= 2 and i.is_available]
-        if low_stock:
-            lines.append(f"Low stock items (≤2 left): {', '.join(i.name for i in low_stock)}")
-        recent_orders = (
-            Order.query.filter(Order.food_item_id.in_(food_ids))
-            .order_by(Order.created_at.desc()).limit(5).all()
-        ) if food_ids else []
-        pending = [o for o in recent_orders if o.status == "pending"]
-        if pending:
-            lines.append(f"Pending orders needing attention: {len(pending)}")
 
+        # Listings breakdown
+        available = [i for i in listings if i.is_available]
+        hidden    = [i for i in listings if not i.is_available]
+        lines.append(f"\nListings: {len(available)} active, {len(hidden)} hidden")
+        if available:
+            lines.append("Active listings:")
+            for item in available:
+                discount = round((item.original_price - item.discounted_price) / item.original_price * 100)
+                lines.append(
+                    f"  • {item.name} — {int(item.discounted_price):,} UZS "
+                    f"(was {int(item.original_price):,}, -{discount}%) "
+                    f"qty={item.quantity} | pickup {item.pickup_start}–{item.pickup_end}"
+                )
+        low_stock = [i for i in available if i.quantity <= 2]
+        if low_stock:
+            lines.append(f"⚠ Low stock (≤2 left): {', '.join(i.name for i in low_stock)}")
+
+        # All orders for this shop
+        all_orders = Order.query.filter(Order.food_item_id.in_(food_ids)).all() if food_ids else []
+
+        # Today's orders
+        today_orders  = [o for o in all_orders if o.created_at >= today_start]
+        today_done    = [o for o in today_orders if o.status in ("confirmed", "picked_up")]
+        today_pending = [o for o in today_orders if o.status == "pending"]
+        today_revenue = sum(o.total_price for o in today_done)
+
+        lines.append(f"\nToday's activity:")
+        lines.append(f"  • Orders received today: {len(today_orders)}")
+        lines.append(f"  • Completed today: {len(today_done)}")
+        lines.append(f"  • Pending (needs action): {len(today_pending)}")
+        lines.append(f"  • Revenue today: {int(today_revenue):,} UZS")
+
+        if today_pending:
+            lines.append(f"  • Pending order IDs: {', '.join(f'#{o.id}' for o in today_pending[:5])}")
+
+        # This week
+        week_orders  = [o for o in all_orders if o.created_at >= week_start]
+        week_done    = [o for o in week_orders if o.status in ("confirmed", "picked_up")]
+        week_revenue = sum(o.total_price for o in week_done)
+        lines.append(f"\nThis week:")
+        lines.append(f"  • Orders: {len(week_orders)} total, {len(week_done)} completed")
+        lines.append(f"  • Revenue: {int(week_revenue):,} UZS")
+
+        # Top selling items (all time)
+        item_sales = {}
+        for o in all_orders:
+            if o.food_item and o.status in ("confirmed", "picked_up"):
+                item_sales[o.food_item.name] = item_sales.get(o.food_item.name, 0) + o.quantity
+        if item_sales:
+            top = sorted(item_sales.items(), key=lambda x: x[1], reverse=True)[:3]
+            lines.append(f"\nTop selling items: {', '.join(f'{n} ({q} sold)' for n, q in top)}")
+
+        # All-time totals
+        all_done    = [o for o in all_orders if o.status in ("confirmed", "picked_up")]
+        all_revenue = sum(o.total_price for o in all_done)
+        lines.append(f"All-time: {len(all_done)} completed orders, {int(all_revenue):,} UZS revenue")
+
+    # ── CUSTOMER ─────────────────────────────────────────────────────────────
     elif user.role == "customer":
-        recent_orders = (
+        # All available listings on the platform
+        available_items = FoodItem.query.filter_by(is_available=True).all()
+        if available_items:
+            lines.append(f"Currently available listings on Tejam ({len(available_items)} items):")
+            # Sort by discount descending
+            sorted_items = sorted(
+                available_items,
+                key=lambda i: (i.original_price - i.discounted_price) / i.original_price,
+                reverse=True
+            )
+            for item in sorted_items:
+                discount = round((item.original_price - item.discounted_price) / item.original_price * 100)
+                shop_name = item.shop.name if item.shop else "?"
+                shop_cat  = item.shop.category if item.shop else "?"
+                lines.append(
+                    f"  • {item.name} at {shop_name} ({shop_cat}) — "
+                    f"{int(item.discounted_price):,} UZS (was {int(item.original_price):,}, -{discount}%) "
+                    f"| pickup {item.pickup_start}–{item.pickup_end} | qty={item.quantity}"
+                )
+
+        # Customer's own orders
+        my_orders = (
             Order.query.filter_by(customer_id=user.id)
-            .order_by(Order.created_at.desc()).limit(5).all()
+            .order_by(Order.created_at.desc()).limit(10).all()
         )
-        if recent_orders:
-            lines.append("Recent orders:")
-            for o in recent_orders:
-                lines.append(f"  - Order #{o.id}: {o.food_item.name if o.food_item else '?'} — {o.status}")
+        if my_orders:
+            lines.append(f"\nYour recent orders:")
+            for o in my_orders:
+                name = o.food_item.name if o.food_item else "?"
+                lines.append(f"  • Order #{o.id}: {name} — {o.status} ({int(o.total_price):,} UZS)")
 
     return "\n".join(lines) if lines else ""
 
@@ -193,19 +359,21 @@ def chat():
 
     live_context = _build_live_context(user)
 
-    system_prompt = f"""You are Tejam's helpful AI assistant. Tejam is a food surplus marketplace in Uzbekistan (like Too Good To Go) connecting shops with surplus food to customers at discounted prices, reducing food waste.
+    system_prompt = f"""You are Tejam's AI assistant — a smart, data-aware helper for a food surplus marketplace in Uzbekistan (like Too Good To Go).
 
-Current user: {user.name} (role: {user.role})
-{f"Live account data:\n{live_context}" if live_context else ""}
+User: {user.name} (role: {user.role})
 
-You know about:
-- Uzbek cuisine: plov, samsa, non bread, shurpa, manti, lagman, dimlama, chuchvara
-- City: Tashkent. Prices in UZS (1 USD ≈ 12,700 UZS)
-- Platform gives customers 30-70% off surplus food
+=== LIVE DATA (use this to answer questions accurately) ===
+{live_context if live_context else "No live data available."}
+=== END LIVE DATA ===
 
-Be friendly, concise, and helpful. Use markdown for formatting when it helps readability (bullet points, bold).
-For shop owners: help with pricing, descriptions, waste reduction, and their listings.
-For customers: help find deals, explain how Tejam works, suggest Uzbek foods."""
+Rules:
+- Always use the live data above to answer questions about prices, orders, sales, listings, deals — never say you don't have access to this information, because you do.
+- For customers asking about deals/prices/cheapest items — refer to the listings in live data.
+- For shop owners asking about today's sales, revenue, orders, pending — refer to the live data figures.
+- Prices are in UZS (1 USD ≈ 12,700 UZS). City is Tashkent, Uzbekistan.
+- Be concise, friendly, and direct. Use markdown (bold, bullets) for lists and comparisons.
+- If asked something outside your data, answer based on general Uzbek food and marketplace knowledge."""
 
     # Build multi-turn contents list
     contents = [{"role": "user", "parts": [{"text": system_prompt}]},
@@ -219,7 +387,7 @@ For customers: help find deals, explain how Tejam works, suggest Uzbek foods."""
 
     try:
         response = client.models.generate_content(
-            model="gemini-2.5-flash",
+            model="gemini-2.0-flash",
             contents=contents,
         )
         reply = response.text.strip()

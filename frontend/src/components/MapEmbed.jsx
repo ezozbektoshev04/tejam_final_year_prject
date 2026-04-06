@@ -1,35 +1,53 @@
 import { useEffect, useRef } from 'react'
 
 const YANDEX_MAPS_API_KEY = import.meta.env.VITE_YANDEX_MAPS_API_KEY
+const hasKey = YANDEX_MAPS_API_KEY && YANDEX_MAPS_API_KEY !== 'your-yandex-maps-api-key-here'
+
+let scriptLoading = false
+const callbacks = []
+
+function getYmaps() {
+  return /** @type {any} */ (window).ymaps
+}
 
 function loadYandexMaps() {
   return new Promise((resolve, reject) => {
-    const w = /** @type {any} */ (window)
-    if (w.ymaps) {
-      w.ymaps.ready(() => resolve(w.ymaps))
+    const ymaps = getYmaps()
+    if (ymaps) {
+      ymaps.ready(() => resolve(ymaps))
       return
     }
+    callbacks.push({ resolve, reject })
+    if (scriptLoading) return
+    scriptLoading = true
     const script = document.createElement('script')
     script.src = `https://api-maps.yandex.ru/2.1/?apikey=${YANDEX_MAPS_API_KEY}&lang=ru_RU`
-    script.onload = () => w.ymaps.ready(() => resolve(w.ymaps))
-    script.onerror = reject
+    script.onload = () => {
+      getYmaps().ready(() => {
+        const y = getYmaps()
+        callbacks.forEach(cb => cb.resolve(y))
+        callbacks.length = 0
+      })
+    }
+    script.onerror = (e) => {
+      callbacks.forEach(cb => cb.reject(e))
+      callbacks.length = 0
+    }
     document.head.appendChild(script)
   })
 }
 
-export default function MapEmbed({ address, shopName, city = 'Tashkent' }) {
+export default function MapEmbed({ address, shopName, city = 'Tashkent', lat, lng }) {
   const mapRef = useRef(null)
   const mapInstanceRef = useRef(null)
 
-  if (!address && !shopName) return null
-
   const query = `${shopName ? shopName + ', ' : ''}${address || ''}, ${city}, Uzbekistan`
   const encodedQuery = encodeURIComponent(query)
-  const directionsUrl = `https://maps.yandex.ru/?rtext=~${encodedQuery}&rtt=auto`
-  const searchUrl = `https://maps.yandex.ru/?text=${encodedQuery}`
+  const directionsUrl = `https://yandex.com/maps/?rtext=~${encodedQuery}&rtt=auto`
+  const searchUrl = `https://yandex.com/maps/?text=${encodedQuery}`
 
   useEffect(() => {
-    if (!YANDEX_MAPS_API_KEY) return
+    if (!hasKey || !mapRef.current) return
 
     let cancelled = false
 
@@ -41,26 +59,31 @@ export default function MapEmbed({ address, shopName, city = 'Tashkent' }) {
         mapInstanceRef.current = null
       }
 
-      ymaps.geocode(query).then((result) => {
+      const initMap = (coords) => {
         if (cancelled || !mapRef.current) return
-
-        const geoObject = result.geoObjects.get(0)
-        if (!geoObject) return
-
-        const coords = geoObject.geometry.getCoordinates()
         const map = new ymaps.Map(mapRef.current, {
           center: coords,
           zoom: 15,
           controls: ['zoomControl'],
         })
-
         map.geoObjects.add(
-          new ymaps.Placemark(coords, { balloonContent: shopName || address })
+          new ymaps.Placemark(coords, {
+            balloonContent: shopName || address,
+          })
         )
-
         mapInstanceRef.current = map
-      })
-    })
+      }
+
+      if (lat && lng) {
+        // Use coordinates directly — no geocoding needed
+        initMap([lat, lng])
+      } else {
+        ymaps.geocode(query).then((result) => {
+          const geoObject = result.geoObjects.get(0)
+          if (geoObject) initMap(geoObject.geometry.getCoordinates())
+        }).catch(() => {})
+      }
+    }).catch(() => {})
 
     return () => {
       cancelled = true
@@ -69,19 +92,22 @@ export default function MapEmbed({ address, shopName, city = 'Tashkent' }) {
         mapInstanceRef.current = null
       }
     }
-  }, [address, shopName, city])
+  }, [lat, lng, address, shopName, city])
+
+  if (!address && !shopName) return null
 
   return (
     <div className="mt-4 rounded-xl overflow-hidden border border-gray-200">
-      {YANDEX_MAPS_API_KEY ? (
+      {hasKey ? (
         <div ref={mapRef} style={{ width: '100%', height: '220px' }} />
       ) : (
-        <div className="bg-gray-100 h-32 flex flex-col items-center justify-center gap-2 text-sm text-gray-500">
-          <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+        <div className="bg-gray-50 h-36 flex flex-col items-center justify-center gap-2 text-sm text-gray-400">
+          <svg className="w-8 h-8 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
           </svg>
-          <span>{address}</span>
+          <span className="font-medium text-gray-500">{address}</span>
+          <span className="text-xs">{city}</span>
         </div>
       )}
 
