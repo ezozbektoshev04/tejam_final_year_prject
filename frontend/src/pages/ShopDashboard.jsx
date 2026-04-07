@@ -57,10 +57,11 @@ export default function ShopDashboard() {
         api.get('/shops/my'),
       ])
       setStats(statsRes.data)
-      const allOrders = ordersRes.data
+      const allOrders = ordersRes.data.orders || []
+      const pendingOrders = allOrders.filter(o => o.status === 'pending')
       setOrders(shopId
-        ? allOrders.filter(o => o.shop_id === shopId).slice(0, 10)
-        : allOrders.slice(0, 10)
+        ? pendingOrders.filter(o => o.shop_id === shopId)
+        : pendingOrders
       )
       setShops(shopsRes.data)
     } catch (err) {
@@ -287,15 +288,15 @@ export default function ShopDashboard() {
       {/* Recent Orders preview */}
       <div className="card">
         <div className="p-5 border-b border-gray-100 flex items-center justify-between">
-          <h2 className="font-semibold text-gray-900">Recent orders</h2>
+          <h2 className="font-semibold text-gray-900">Pending orders</h2>
           <Link to="/shop-orders" className="text-sm font-semibold text-primary-700 hover:text-primary-900 transition-colors">
             View all orders →
           </Link>
         </div>
         {orders.length === 0 ? (
           <div className="p-10 text-center text-gray-400">
-            <p className="text-4xl mb-2">📭</p>
-            <p>No orders yet</p>
+            <p className="text-4xl mb-2">✅</p>
+            <p>No pending orders right now</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -316,7 +317,7 @@ export default function ShopDashboard() {
                   const status = STATUS_CONFIG[order.status]
                   return (
                     <tr key={order.id} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 text-gray-500">#{order.id}</td>
+                      <td className="px-4 py-3 font-mono text-xs text-gray-500">{order.order_ref}</td>
                       <td className="px-4 py-3 font-medium text-gray-900 max-w-[140px] truncate">
                         {order.food_item_name}
                       </td>

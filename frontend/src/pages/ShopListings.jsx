@@ -194,10 +194,16 @@ export default function ShopListings() {
   }
 
   const toggleAvailable = async (item) => {
+    if (!item.is_available && item.quantity <= 0) {
+      alert('Cannot activate a listing with 0 quantity. Edit the listing and set a quantity first.')
+      return
+    }
     try {
       const res = await api.put(`/food-items/${item.id}`, { is_available: !item.is_available })
       setItems(items.map(i => i.id === item.id ? { ...i, is_available: res.data.is_available } : i))
-    } catch {}
+    } catch (err) {
+      alert(err.response?.data?.error || 'Failed to update listing')
+    }
   }
 
   const visibleItems = items.filter(i => i.shop_id === selectedShopId)
@@ -298,11 +304,17 @@ export default function ShopListings() {
                     <div className="absolute top-2 right-2">
                       <button
                         onClick={() => toggleAvailable(item)}
-                        className={`text-xs px-2 py-1 rounded-full font-medium ${
-                          item.is_available ? 'bg-primary-600 text-white' : 'bg-gray-600 text-white'
+                        disabled={!item.is_available && item.quantity <= 0}
+                        title={!item.is_available && item.quantity <= 0 ? 'Set quantity > 0 to activate' : ''}
+                        className={`text-xs px-2 py-1 rounded-full font-medium transition-colors ${
+                          item.is_available
+                            ? 'bg-primary-600 text-white'
+                            : item.quantity <= 0
+                            ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                            : 'bg-gray-600 text-white'
                         }`}
                       >
-                        {item.is_available ? 'Active' : 'Hidden'}
+                        {item.is_available ? 'Active' : item.quantity <= 0 ? 'No stock' : 'Hidden'}
                       </button>
                     </div>
                     {item.quantity <= 2 && item.quantity > 0 && (

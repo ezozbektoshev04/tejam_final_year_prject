@@ -102,6 +102,12 @@ def update_item(item_id):
     if not data:
         return jsonify({"error": "No data provided"}), 400
 
+    # Block making available if quantity is 0
+    if data.get("is_available") is True:
+        new_qty = int(data.get("quantity", item.quantity))
+        if new_qty <= 0:
+            return jsonify({"error": "Cannot activate a listing with 0 quantity. Update the quantity first."}), 400
+
     updatable = [
         "name", "description", "original_price", "discounted_price",
         "quantity", "pickup_start", "pickup_end", "image_url", "is_available"

@@ -124,6 +124,14 @@ def create_order():
 
     shop_owner_id = item.shop.owner.id if item.shop and item.shop.owner else None
     ref = order.order_ref or f"#{order.id}"
+    shop_name = item.shop.name if item.shop else "the shop"
+
+    # Notify customer — order placed confirmation
+    create_notification(
+        user_id,
+        f"Order {ref} placed! Head to {shop_name} between {item.pickup_start}–{item.pickup_end} to pick up your '{item.name}'. Show your QR code at the counter.",
+        link="/orders",
+    )
 
     # Notify shop owner of new order
     if shop_owner_id:
@@ -178,14 +186,20 @@ def update_status(order_id):
     if new_status not in valid_statuses:
         return jsonify({"error": f"Invalid status. Must be one of: {valid_statuses}"}), 400
 
+    if order.status == "picked_up":
+        return jsonify({"error": "Cannot change status of an already picked up order"}), 400
+    if order.status == "cancelled":
+        return jsonify({"error": "Cannot change status of a cancelled order"}), 400
+
     order.status = new_status
 
     # Notify customer
     ref = order.order_ref or f"#{order.id}"
+    food_name = order.food_item.name if order.food_item else "your order"
     messages = {
-        "confirmed":  f"Your order {ref} has been confirmed! Get ready for pickup.",
-        "picked_up":  f"Order {ref} marked as picked up. Enjoy your meal!",
-        "cancelled":  f"Your order {ref} was cancelled by the shop.",
+        "confirmed":  f"Great news! Your order {ref} has been confirmed by the shop. Head over and show your QR code!",
+        "picked_up":  f"Enjoy your meal! 🎉 Order {ref} — '{food_name}' has been picked up. Thanks for choosing Tejam and helping reduce food waste!",
+        "cancelled":  f"Your order {ref} for '{food_name}' was cancelled by the shop. Sorry for the inconvenience!",
     }
     msg = messages.get(new_status)
     if msg:
@@ -233,6 +247,17 @@ def cancel_order(order_id):
                 )
 
     order.status = "cancelled"
+
+    # Notify the customer about their own cancellation confirmation
+    ref = order.order_ref or f"#{order.id}"
+    item = FoodItem.query.get(order.food_item_id)
+    item_name = item.name if item else "your item"
+    create_notification(
+        order.customer_id,
+        f"You cancelled order {ref} for '{item_name}'. We hope to see you again soon!",
+        link="/orders",
+    )
+
     db.session.commit()
     return jsonify({"message": "Order cancelled successfully"})
 
