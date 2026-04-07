@@ -5,25 +5,44 @@ Tejam (тежам — "economical" in Uzbek) is a full-stack web application ins
 ## Features
 
 ### For customers
-- Browse discounted food from real Tashkent brands: Korzinka, Havas, Sofia, Tarnov, Diet Bistro, Feed UP
+- Browse discounted food from real Tashkent brands: Korzinka, Sofia, Tarnov, Diet Bistro, Feed UP
 - **AI-powered personalized recommendations** — "Recommended for you" strip based on order history
-- **GPS-based "Near me" sorting** — branches sorted by distance from your location
+- **GPS-based "Near me" sorting** — branches sorted by distance from your location, falls back to Tashkent center
 - **Two payment options** on every order: pay online via Stripe or reserve and pay cash in store
 - **QR code pickup** — show the QR code at the store, staff scans to confirm
 - **Order tracking** — real-time status: pending → confirmed → picked up
+- **Friendly order references** — orders identified by `TJ-XXXXXX` codes instead of sequential IDs
 - **Yandex Maps directions** built into every food item page
-- **Reviews** after completed pickups
+- **Per-item reviews** after completed pickups — ratings tied to the specific food item
+- **Full notification history** — bell icon with unread badge, polls every 10 seconds
+- Notifications at every stage: order placed, confirmed, picked up, cancelled
 
 ### For shop partners
 - **One company login manages all branches** — Korzinka logs in once and sees both branches
 - **Branch selector** in dashboard and listings — switch between branches or view all at once
 - **Revenue analytics** — Recharts graphs per branch or aggregated across all locations
 - **Excel report download** — export orders by period (daily / weekly / hourly) and branch
-- **Food listing management** — create, edit, toggle availability per branch
-- **Shop Orders page** — dedicated orders view with filters, search, pagination
-- **In-app notifications** — bell icon with unread badge, auto-polls every 30 seconds
+- **Archive & restore listings** — items auto-archive when sold out; shop can restore with a new quantity and pickup window instead of re-creating from scratch
+- **Listing management** — create, edit, toggle availability, archive, restore per branch
+- **Pending orders panel** on dashboard — all pending orders at a glance, with one-click status advance
+- **Shop Orders page** — dedicated orders view with filters (status, payment, period, branch), search, and pagination
+- **In-app notifications** — low stock alerts, sold-out alerts, new order alerts, cancellation alerts
 - **AI-powered tools** — auto-generate descriptions and suggest optimal discount prices (Google Gemini)
 - **Photo upload** for listings — drag and drop or click
+
+### Notifications (both roles)
+Customers receive:
+- Order placed confirmation with pickup window details
+- Order confirmed by shop
+- Order picked up — "Enjoy your meal!" message
+- Order cancelled by shop
+- Self-cancellation confirmation — "You cancelled order TJ-XXXXXX"
+
+Shop owners receive:
+- New order placed
+- Order cancelled by customer — stock restore details included
+- Low stock warning (≤ 2 portions remaining)
+- Sold-out + auto-archived alert
 
 ### AI assistant
 - **Live data context** — AI chatbot has real-time access to listings, prices, orders, and revenue
@@ -53,7 +72,7 @@ Tejam (тежам — "economical" in Uzbek) is a full-stack web application ins
 | Database  | SQLite (via SQLAlchemy) |
 | Payments  | Stripe Checkout (test mode) via `stripe` Python SDK |
 | AI        | Google Gemini API (`gemini-2.0-flash`) via `google-genai` |
-| Maps      | Yandex Maps JS API 2.1 |
+| Maps      | Yandex Maps JS API 2.1 (item detail embed + Browse map tab) |
 | Reports   | openpyxl (Excel export) |
 
 ## Project Structure
@@ -67,8 +86,8 @@ tejam/
 │   ├── routes/
 │   │   ├── auth.py         # Register / login / me
 │   │   ├── shops.py        # Shop CRUD, /my returns all branches
-│   │   ├── food_items.py   # Food item CRUD with shop_id support
-│   │   ├── orders.py       # Orders, QR pickup, stats (branch filter)
+│   │   ├── food_items.py   # Food item CRUD + archive/restore endpoints
+│   │   ├── orders.py       # Orders, QR pickup, stats, notifications at every stage
 │   │   ├── payments.py     # Stripe checkout session, verify, retry
 │   │   ├── ai.py           # Gemini AI: describe, suggest-price, recommendations, chat
 │   │   ├── reports.py      # Excel export with period/granularity filter
@@ -87,12 +106,12 @@ tejam/
     ├── src/
     │   ├── pages/
     │   │   ├── Home.jsx            # Landing page with hero + stats
-    │   │   ├── Browse.jsx          # Browse listings + AI recommendations strip
-    │   │   ├── FoodDetail.jsx      # Item detail + order form + Yandex Maps
-    │   │   ├── Orders.jsx          # Customer orders with QR, retry payment
+    │   │   ├── Browse.jsx          # Browse listings + Near me + Map tab
+    │   │   ├── FoodDetail.jsx      # Item detail + order form + per-item reviews + Yandex Maps
+    │   │   ├── Orders.jsx          # Customer orders with QR, cancel, review, order_ref display
     │   │   ├── PaymentSuccess.jsx  # Post-Stripe redirect confirmation
-    │   │   ├── ShopDashboard.jsx   # Branch stats + report download
-    │   │   ├── ShopListings.jsx    # Manage listings per branch
+    │   │   ├── ShopDashboard.jsx   # Branch stats + pending orders panel + report download
+    │   │   ├── ShopListings.jsx    # Manage listings: active/archived tabs, restore modal
     │   │   ├── ShopOrders.jsx      # Shop orders with filters and pagination
     │   │   ├── AIAssistant.jsx     # Persistent AI chat (shop + customer modes)
     │   │   ├── PickupConfirm.jsx   # QR scan page for shop staff
@@ -102,16 +121,18 @@ tejam/
     │   │   └── Register.jsx
     │   ├── components/
     │   │   ├── Navbar.jsx          # White navbar, role-aware links, notification bell
-    │   │   ├── NotificationBell.jsx # Bell icon, unread badge, 30s polling
+    │   │   ├── NotificationBell.jsx # Bell icon, unread badge, 10s polling
     │   │   ├── ProtectedRoute.jsx  # Role-based route guard with custom loginPath
     │   │   ├── FoodCard.jsx
     │   │   ├── ShopCard.jsx        # Distance badge when near-me is active
-    │   │   ├── MapEmbed.jsx        # Yandex Maps JS API 2.1 embed
+    │   │   ├── ShopsMap.jsx        # Yandex Map with colored pins per category + legend
+    │   │   ├── MapEmbed.jsx        # Yandex Maps JS API 2.1 embed on food detail page
     │   │   └── ImageUpload.jsx
     │   ├── context/
     │   │   └── AuthContext.jsx     # JWT auth state, login/logout (clears chat history)
     │   ├── utils/
-    │   │   └── distance.js         # Haversine formula for GPS sorting
+    │   │   ├── distance.js         # Haversine formula for GPS sorting
+    │   │   └── yandexMaps.js       # Singleton Yandex Maps script loader (prevents double-injection)
     │   └── api/
     │       └── axios.js            # Axios instance with JWT + 401 interceptors
     ├── .env                        # VITE_YANDEX_MAPS_API_KEY
@@ -158,10 +179,10 @@ python app.py
 The backend starts on **http://localhost:5000**
 
 On first run, the database is automatically created and seeded with full demo data:
-- **6 shop partner accounts**, each owning 2 branches (12 branches total)
-- **84 food listings** (7 bags per branch), with category-matched images
-- **10 customer accounts**, each with 15+ orders spread over 45 days
-- **67 reviews** on completed orders
+- **5 shop partner accounts**, each owning 2 branches (10 branches total)
+- Food listings across all branches with category-matched images
+- Customer accounts with order history
+- Reviews on completed orders
 - **1 admin account** (guaranteed on every startup)
 
 ### Frontend Setup
@@ -194,9 +215,7 @@ The frontend starts on **http://localhost:5173**.
 |-------|----------|
 | customer1@tejam.uz | password123 |
 | customer2@tejam.uz | password123 |
-| customer3@tejam.uz | password123 |
-| … | … |
-| customer10@tejam.uz | password123 |
+| … up to customer10 | password123 |
 
 ### Shop partners — one login per company
 Each company account manages both its branches from a single login. Use the branch selector in the dashboard to switch between locations.
@@ -204,7 +223,6 @@ Each company account manages both its branches from a single login. Use the bran
 | Company | Category | Branches | Email | Password |
 |---------|----------|----------|-------|----------|
 | Korzinka | Grocery | 2 | korzinka@tejam.uz | password123 |
-| Havas | Grocery | 2 | havas@tejam.uz | password123 |
 | Sofia | Bakery | 2 | sofia@tejam.uz | password123 |
 | Tarnov | Restaurant | 2 | tarnov@tejam.uz | password123 |
 | Diet Bistro | Restaurant | 2 | dietbistro@tejam.uz | password123 |
@@ -226,7 +244,7 @@ FRONTEND_URL=http://localhost:5173            # Used for Stripe redirect URLs
 `frontend/.env`:
 
 ```env
-VITE_YANDEX_MAPS_API_KEY=your-key-here       # Optional — interactive map on food detail page
+VITE_YANDEX_MAPS_API_KEY=your-key-here       # Optional — interactive map on food detail + browse map tab
 ```
 
 > The app works without Gemini, Stripe, and Yandex Maps keys — AI features show fallback responses, only cash payment works, and the map shows address text with external links instead.
@@ -265,20 +283,22 @@ CVC:          Any 3 digits
 ### Food Items (`/api/food-items`)
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/` | List available items (filter: shop_id, search, category) |
-| GET | `/:id` | Item detail with reviews |
+| GET | `/` | List available non-archived items (filter: shop_id, search, category) |
+| GET | `/:id` | Item detail with per-item reviews |
 | POST | `/` | Create item — requires `shop_id` (JWT, shop) |
-| PUT | `/:id` | Update item (JWT, owner of that branch) |
-| DELETE | `/:id` | Delete item (JWT, owner of that branch) |
+| PUT | `/:id` | Update item — blocks activation when quantity is 0 (JWT, owner) |
+| PUT | `/:id/archive` | Archive item — hides from browse (JWT, owner) |
+| PUT | `/:id/restore` | Restore archived item with new quantity + pickup window (JWT, owner) |
+| DELETE | `/:id` | Permanently delete item and its orders/reviews (JWT, owner) |
 
 ### Orders (`/api/orders`)
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/` | My orders (customer) or filtered branch orders (shop) |
-| POST | `/` | Place cash order (JWT, customer) |
-| PUT | `/:id/status` | Update status (JWT, shop) |
-| DELETE | `/:id` | Cancel pending or pending_payment order |
-| POST | `/:id/review` | Submit review (picked_up only) |
+| POST | `/` | Place cash order — decrements stock, auto-archives if sold out (JWT, customer) |
+| PUT | `/:id/status` | Update status — blocked on picked_up/cancelled orders (JWT, shop) |
+| DELETE | `/:id` | Cancel pending order — restores stock, un-archives if sold-out caused archive |
+| POST | `/:id/review` | Submit per-item review (picked_up only) |
 | GET | `/stats?shop_id=` | Dashboard stats, optional branch filter (JWT, shop) |
 | GET | `/pickup/:token` | Order info by QR token (public) |
 | PUT | `/pickup/:token/confirm` | Confirm pickup (JWT, shop) |
@@ -330,14 +350,14 @@ CVC:          Any 3 digits
 | Path | Access |
 |------|--------|
 | `/` | Public — landing page |
-| `/browse` | Public — browse all listings |
+| `/browse` | Public — browse all listings + map tab |
 | `/food/:id` | Public — food item detail + order |
 | `/login` | Public — customer / shop login |
 | `/register` | Public — customer / shop registration |
 | `/pickup/:token` | Public — QR pickup confirmation for shop staff |
 | `/orders` | Customer only |
-| `/dashboard` | Shop only — branch analytics + report download |
-| `/listings` | Shop only — branch listings management |
+| `/dashboard` | Shop only — branch analytics + pending orders + report download |
+| `/listings` | Shop only — active/archived listings management |
 | `/shop-orders` | Shop only — orders with filters and pagination |
 | `/ai` | Any logged-in user |
 | `/payment/success` | Post-Stripe redirect (customer) |
@@ -349,7 +369,20 @@ CVC:          Any 3 digits
 ```
 Online payment:   pending_payment → (Stripe paid) → pending → confirmed → picked_up
 Cash payment:     pending → confirmed → picked_up
-Cancelled:        pending_payment or pending → cancelled
+Cancelled:        pending_payment or pending → cancelled (stock restored automatically)
+```
+
+Status changes on `picked_up` or `cancelled` orders are blocked at the backend level.
+
+## Food Item Lifecycle
+
+```
+Created → available (is_available=true, is_archived=false)
+       → sold out → auto-archived (is_available=false, is_archived=true)
+       → restored by shop → available again (new quantity + pickup window)
+
+Shop can also manually archive/restore any listing at any time.
+Cannot activate a listing with 0 quantity — quantity must be set first.
 ```
 
 ## Running Both Servers
