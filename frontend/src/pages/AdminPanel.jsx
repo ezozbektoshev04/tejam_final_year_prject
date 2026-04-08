@@ -24,7 +24,14 @@ function StatCard({ title, value, sub, icon }) {
   )
 }
 
-const TABS = ['Overview', 'Customers', 'Shop Owners']
+const TABS = ['Overview', 'Customers', 'Shop Owners', 'Settings']
+
+const NOTIF_KEYS = [
+  { key: 'notification_order_placed',    label: 'Order placed (to customer)',    vars: '{ref}, {shop}, {pickup_start}, {pickup_end}, {item}' },
+  { key: 'notification_order_confirmed', label: 'Order confirmed (to customer)', vars: '{ref}' },
+  { key: 'notification_order_picked_up', label: 'Order picked up (to customer)', vars: '{ref}, {item}' },
+  { key: 'notification_order_cancelled', label: 'Order cancelled by shop (to customer)', vars: '{ref}, {item}' },
+]
 
 export default function AdminPanel() {
   const { logout } = useAuth()
@@ -37,9 +44,14 @@ export default function AdminPanel() {
   const [deleting, setDeleting] = useState(null)
   const [toggling, setToggling] = useState(null)
 
-  useEffect(() => {
-    fetchAll()
-  }, [])
+  // Settings state
+  const [settings, setSettings] = useState(null)
+  const [settingsLoading, setSettingsLoading] = useState(false)
+  const [settingsMsg, setSettingsMsg] = useState(null)
+  const [newCategory, setNewCategory] = useState('')
+
+  useEffect(() => { fetchAll() }, [])
+  useEffect(() => { if (tab === 'Settings' && !settings) fetchSettings() }, [tab])
 
   const fetchAll = async () => {
     setLoading(true)
@@ -57,6 +69,61 @@ export default function AdminPanel() {
     } finally {
       setLoading(false)
     }
+  }
+
+  const fetchSettings = async () => {
+    try {
+      const res = await api.get('/admin/settings')
+      setSettings(res.data)
+    } catch (err) {
+      console.error(err)
+    }
+  }
+
+  const saveSettings = async (patch) => {
+    setSettingsLoading(true)
+    setSettingsMsg(null)
+    try {
+      await api.put('/admin/settings', patch)
+      setSettings(s => ({ ...s, ...patch }))
+      setSettingsMsg({ type: 'success', text: 'Settings saved.' })
+    } catch (err) {
+      setSettingsMsg({ type: 'error', text: err.response?.data?.error || 'Save failed.' })
+    } finally {
+      setSettingsLoading(false)
+      setTimeout(() => setSettingsMsg(null), 3000)
+    }
+  }
+
+  const handleAddCategory = () => {
+    const cat = newCategory.trim()
+    if (!cat || settings.categories.includes(cat)) return
+    const updated = [...settings.categories, cat]
+    setSettings(s => ({ ...s, categories: updated }))
+    setNewCategory('')
+    saveSettings({ categories: updated })
+  }
+
+  const handleRemoveCategory = (cat) => {
+    const updated = settings.categories.filter(c => c !== cat)
+    setSettings(s => ({ ...s, categories: updated }))
+    saveSettings({ categories: updated })
+  }
+
+  const handleThresholdSave = () => {
+    saveSettings({
+      min_discount_percent: Number(settings.min_discount_percent),
+      max_discount_percent: Number(settings.max_discount_percent),
+      low_stock_threshold:  Number(settings.low_stock_threshold),
+    })
+  }
+
+  const handleTemplateChange = (key, value) => {
+    setSettings(s => ({ ...s, [key]: value }))
+  }
+
+  const handleTemplateSave = (key) => {
+    saveSettings({ [key]: settings[key] })
   }
 
   const handleDeleteUser = async (userId, name) => {
@@ -254,6 +321,148 @@ export default function AdminPanel() {
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {/* ── Settings ── */}
+      {tab === 'Settings' && (
+        <div className="space-y-6">
+
+          {settingsMsg && (
+            <div className={`p-3 rounded-xl text-sm flex items-center gap-2 ${
+              settingsMsg.type === 'success'
+                ? 'bg-primary-50 border border-primary-200 text-primary-700'
+                : 'bg-red-50 border border-red-200 text-red-700'
+            }`}>
+              {settingsMsg.type === 'success' ? '✓' : '✕'} {settingsMsg.text}
+            </div>
+          )}
+
+          {!settings ? (
+            <div className="card p-10 text-center text-gray-400">
+              <div className="animate-spin w-6 h-6 border-2 border-primary-600 border-t-transparent rounded-full mx-auto mb-3" />
+              Loading settings…
+            </div>
+          ) : (
+            <>
+              {/* ── Categories ── */}
+              <div className="card p-6">
+                <h2 className="font-semibold text-gray-900 mb-1">Food categories</h2>
+                <p className="text-sm text-gray-500 mb-4">These categories appear in browse filters and shop registration.</p>
+                <div className="flex flex-wrap gap-2 mb-4">
+                  {(settings.categories || []).map(cat => (
+                    <span key={cat} className="inline-flex items-center gap-1.5 bg-primary-50 text-primary-800 text-sm font-medium px-3 py-1.5 rounded-lg border border-primary-200">
+                      {cat}
+                      <button
+                        onClick={() => handleRemoveCategory(cat)}
+                        className="text-primary-400 hover:text-red-500 transition-colors ml-0.5"
+                        title="Remove"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </span>
+                  ))}
+                </div>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    className="input-field flex-1 text-sm"
+                    placeholder="New category name…"
+                    value={newCategory}
+                    onChange={e => setNewCategory(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && handleAddCategory()}
+                  />
+                  <button
+                    onClick={handleAddCategory}
+                    disabled={!newCategory.trim() || settingsLoading}
+                    className="btn-primary text-sm px-4 disabled:opacity-50"
+                  >
+                    Add
+                  </button>
+                </div>
+              </div>
+
+              {/* ── Discount thresholds ── */}
+              <div className="card p-6">
+                <h2 className="font-semibold text-gray-900 mb-1">Discount thresholds</h2>
+                <p className="text-sm text-gray-500 mb-4">Platform-wide guidelines for shop owners when setting prices.</p>
+                <div className="grid sm:grid-cols-3 gap-4 mb-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Min discount (%)</label>
+                    <input
+                      type="number" min={1} max={99}
+                      className="input-field"
+                      value={settings.min_discount_percent ?? 20}
+                      onChange={e => setSettings(s => ({ ...s, min_discount_percent: e.target.value }))}
+                    />
+                    <p className="text-xs text-gray-400 mt-1">Minimum recommended discount</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Max discount (%)</label>
+                    <input
+                      type="number" min={1} max={99}
+                      className="input-field"
+                      value={settings.max_discount_percent ?? 80}
+                      onChange={e => setSettings(s => ({ ...s, max_discount_percent: e.target.value }))}
+                    />
+                    <p className="text-xs text-gray-400 mt-1">Maximum allowed discount</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Low stock alert (qty)</label>
+                    <input
+                      type="number" min={1} max={20}
+                      className="input-field"
+                      value={settings.low_stock_threshold ?? 2}
+                      onChange={e => setSettings(s => ({ ...s, low_stock_threshold: e.target.value }))}
+                    />
+                    <p className="text-xs text-gray-400 mt-1">Notify shop when stock ≤ this</p>
+                  </div>
+                </div>
+                <button
+                  onClick={handleThresholdSave}
+                  disabled={settingsLoading}
+                  className="btn-primary text-sm"
+                >
+                  {settingsLoading ? 'Saving…' : 'Save thresholds'}
+                </button>
+              </div>
+
+              {/* ── Notification templates ── */}
+              <div className="card p-6">
+                <h2 className="font-semibold text-gray-900 mb-1">Notification templates</h2>
+                <p className="text-sm text-gray-500 mb-4">
+                  Edit the in-app notification messages. Use the placeholder variables shown under each template.
+                </p>
+                <div className="space-y-5">
+                  {NOTIF_KEYS.map(({ key, label, vars }) => (
+                    <div key={key}>
+                      <div className="flex items-start justify-between mb-1.5">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700">{label}</label>
+                          <p className="text-xs text-gray-400 mt-0.5">Variables: <span className="font-mono">{vars}</span></p>
+                        </div>
+                        <button
+                          onClick={() => handleTemplateSave(key)}
+                          disabled={settingsLoading}
+                          className="text-xs btn-primary px-3 py-1.5 ml-4 flex-shrink-0"
+                        >
+                          Save
+                        </button>
+                      </div>
+                      <textarea
+                        rows={2}
+                        className="input-field resize-none text-sm font-mono"
+                        value={settings[key] ?? ''}
+                        onChange={e => handleTemplateChange(key, e.target.value)}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
         </div>
       )}
 

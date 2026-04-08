@@ -17,6 +17,9 @@ import PickupConfirm from './pages/PickupConfirm'
 import PaymentSuccess from './pages/PaymentSuccess'
 import AdminPanel from './pages/AdminPanel'
 import AdminLogin from './pages/AdminLogin'
+import Profile from './pages/Profile'
+import VerifyEmail from './pages/VerifyEmail'
+import ForgotPassword from './pages/ForgotPassword'
 
 function Layout() {
   const location = useLocation()
@@ -30,6 +33,8 @@ function Layout() {
         <Route path="/" element={<Home />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/verify-email" element={<VerifyEmail />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/browse" element={<Browse />} />
         <Route path="/food/:id" element={<FoodDetail />} />
         <Route path="/pickup/:token" element={<PickupConfirm />} />
@@ -63,6 +68,11 @@ function Layout() {
         <Route path="/ai" element={
           <ProtectedRoute>
             <AIAssistant />
+          </ProtectedRoute>
+        } />
+        <Route path="/profile" element={
+          <ProtectedRoute>
+            <Profile />
           </ProtectedRoute>
         } />
 

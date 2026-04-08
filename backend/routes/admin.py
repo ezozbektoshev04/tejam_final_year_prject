@@ -1,6 +1,7 @@
+import json
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from models import db, User, Shop, Order, FoodItem
+from models import db, User, Shop, Order, FoodItem, PlatformSetting
 
 admin_bp = Blueprint("admin", __name__)
 
@@ -124,3 +125,52 @@ def toggle_shop(shop_id):
     shop.is_active = not shop.is_active
     db.session.commit()
     return jsonify({"id": shop.id, "is_active": shop.is_active})
+
+
+# ── Platform Settings ─────────────────────────────────────────────────────────
+
+ALLOWED_KEYS = {
+    "categories",
+    "min_discount_percent",
+    "max_discount_percent",
+    "low_stock_threshold",
+    "notification_order_placed",
+    "notification_order_confirmed",
+    "notification_order_picked_up",
+    "notification_order_cancelled",
+}
+
+
+@admin_bp.route("/settings", methods=["GET"])
+@jwt_required()
+def get_settings():
+    if not require_admin():
+        return jsonify({"error": "Admin access required"}), 403
+
+    rows = PlatformSetting.query.filter(PlatformSetting.key.in_(ALLOWED_KEYS)).all()
+    result = {}
+    for row in rows:
+        try:
+            result[row.key] = json.loads(row.value)
+        except Exception:
+            result[row.key] = row.value
+    return jsonify(result)
+
+
+@admin_bp.route("/settings", methods=["PUT"])
+@jwt_required()
+def update_settings():
+    if not require_admin():
+        return jsonify({"error": "Admin access required"}), 403
+
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "No data provided"}), 400
+
+    for key, value in data.items():
+        if key not in ALLOWED_KEYS:
+            continue
+        PlatformSetting.set(key, value)
+
+    db.session.commit()
+    return jsonify({"message": "Settings updated successfully"})

@@ -1,7 +1,7 @@
 import uuid
 import random
 import string
-from datetime import datetime
+from datetime import datetime, timedelta
 from flask_sqlalchemy import SQLAlchemy
 
 db = SQLAlchemy()
@@ -20,6 +20,7 @@ class User(db.Model):
     role = db.Column(db.String(20), nullable=False)  # 'shop' | 'customer'
     name = db.Column(db.String(100), nullable=False)
     phone = db.Column(db.String(30))
+    is_verified = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     shops = db.relationship("Shop", backref="owner", uselist=True, lazy=True)
@@ -177,6 +178,65 @@ class Notification(db.Model):
             "is_read": self.is_read,
             "created_at": self.created_at.isoformat(),
         }
+
+
+class PlatformSetting(db.Model):
+    """Key-value store for admin-configurable platform settings."""
+    __tablename__ = "platform_settings"
+
+    id    = db.Column(db.Integer, primary_key=True)
+    key   = db.Column(db.String(100), unique=True, nullable=False)
+    value = db.Column(db.Text, nullable=False)  # JSON-encoded
+
+    @staticmethod
+    def get(key, default=None):
+        import json
+        row = PlatformSetting.query.filter_by(key=key).first()
+        if row is None:
+            return default
+        try:
+            return json.loads(row.value)
+        except Exception:
+            return row.value
+
+    @staticmethod
+    def set(key, value):
+        import json
+        row = PlatformSetting.query.filter_by(key=key).first()
+        encoded = json.dumps(value)
+        if row:
+            row.value = encoded
+        else:
+            row = PlatformSetting(key=key, value=encoded)
+            db.session.add(row)
+
+
+class VerificationCode(db.Model):
+    __tablename__ = "verification_codes"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    code = db.Column(db.String(6), nullable=False)
+    purpose = db.Column(db.String(20), nullable=False)  # 'register' | 'reset'
+    expires_at = db.Column(db.DateTime, nullable=False)
+    is_used = db.Column(db.Boolean, default=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    @staticmethod
+    def generate(user_id, purpose):
+        # Invalidate any previous unused codes for same user+purpose
+        VerificationCode.query.filter_by(
+            user_id=user_id, purpose=purpose, is_used=False
+        ).update({"is_used": True})
+        code = str(random.randint(100000, 999999))
+        vc = VerificationCode(
+            user_id=user_id,
+            code=code,
+            purpose=purpose,
+            expires_at=datetime.utcnow() + timedelta(minutes=15),
+        )
+        db.session.add(vc)
+        return vc
 
 
 class Review(db.Model):

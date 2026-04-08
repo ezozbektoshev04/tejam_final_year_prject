@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from models import db, User, Shop, FoodItem, Order, Review
+from models import db, User, Shop, FoodItem, Order, Review, PlatformSetting
 from utils.notifications import create_notification
 
 orders_bp = Blueprint("orders", __name__)
@@ -152,8 +152,8 @@ def create_order():
                 f"'{item.name}' is sold out and has been archived. Restore it anytime to relist.",
                 link="/listings",
             )
-    # Low stock warning (2 or fewer left, not yet zero)
-    elif item.quantity <= 2:
+    # Low stock warning (configurable threshold, not yet zero)
+    elif item.quantity <= PlatformSetting.get("low_stock_threshold", 2):
         if shop_owner_id:
             create_notification(
                 shop_owner_id,
@@ -327,18 +327,35 @@ def shop_stats():
         ratings = [s.rating for s in user.shops if s.rating]
         avg_rating = sum(ratings) / len(ratings) if ratings else 0
 
+    # Date range filter (default: last 7 days)
+    days_param = request.args.get("days", 7, type=int)   # 7 | 30 | 90
+    start_str  = request.args.get("start")
+    end_str    = request.args.get("end")
+    today = datetime.utcnow().date()
+
+    if start_str and end_str:
+        try:
+            range_start = datetime.strptime(start_str, "%Y-%m-%d").date()
+            range_end   = datetime.strptime(end_str,   "%Y-%m-%d").date()
+        except ValueError:
+            range_start = today - timedelta(days=6)
+            range_end   = today
+    else:
+        range_start = today - timedelta(days=days_param - 1)
+        range_end   = today
+
     all_orders = Order.query.filter(Order.food_item_id.in_(food_ids)).all() if food_ids else []
-    completed = [o for o in all_orders if o.status in ("confirmed", "picked_up")]
+    completed  = [o for o in all_orders if o.status in ("confirmed", "picked_up")]
 
     total_revenue = sum(o.total_price for o in completed)
-    total_orders = len(all_orders)
-    items_listed = len(food_ids)
+    total_orders  = len(all_orders)
+    items_listed  = len(food_ids)
 
-    # Revenue by day (last 7 days)
-    today = datetime.utcnow().date()
+    # Revenue chart — one entry per day in selected range
+    num_days = (range_end - range_start).days + 1
     daily_revenue = {}
-    for i in range(7):
-        day = today - timedelta(days=i)
+    for i in range(num_days):
+        day = range_start + timedelta(days=i)
         daily_revenue[day.isoformat()] = 0
 
     for o in completed:
@@ -350,6 +367,23 @@ def shop_stats():
         {"date": k, "revenue": v}
         for k, v in sorted(daily_revenue.items())
     ]
+
+    # Order status breakdown
+    status_counts = {"pending": 0, "confirmed": 0, "picked_up": 0, "cancelled": 0}
+    for o in all_orders:
+        if o.status in status_counts:
+            status_counts[o.status] += 1
+    status_chart = [{"status": k, "count": v} for k, v in status_counts.items()]
+
+    # Revenue by category
+    category_revenue = {}
+    for o in completed:
+        cat = o.food_item.shop.category if o.food_item and o.food_item.shop else "Other"
+        category_revenue[cat] = category_revenue.get(cat, 0) + o.total_price
+    category_chart = sorted(
+        [{"category": k, "revenue": v} for k, v in category_revenue.items()],
+        key=lambda x: x["revenue"], reverse=True
+    )
 
     # Top items by orders
     item_counts = {}
@@ -364,12 +398,16 @@ def shop_stats():
     )[:5]
 
     return jsonify({
-        "total_revenue": total_revenue,
-        "total_orders": total_orders,
-        "items_listed": items_listed,
-        "avg_rating": round(avg_rating, 2),
-        "revenue_chart": revenue_chart,
-        "top_items": top_items,
+        "total_revenue":  total_revenue,
+        "total_orders":   total_orders,
+        "items_listed":   items_listed,
+        "avg_rating":     round(avg_rating, 2),
+        "revenue_chart":  revenue_chart,
+        "status_chart":   status_chart,
+        "category_chart": category_chart,
+        "top_items":      top_items,
+        "range_start":    range_start.isoformat(),
+        "range_end":      range_end.isoformat(),
     })
 
 

@@ -45,11 +45,8 @@ export function AuthProvider({ children }) {
 
   const register = useCallback(async (formData) => {
     const res = await api.post('/auth/register', formData)
-    const { access_token, user: userData } = res.data
-    localStorage.setItem('access_token', access_token)
-    localStorage.setItem('user', JSON.stringify(userData))
-    setUser(userData)
-    return userData
+    // Returns { message, email, user_id } — no JWT until email is verified
+    return res.data
   }, [])
 
   const logout = useCallback(() => {

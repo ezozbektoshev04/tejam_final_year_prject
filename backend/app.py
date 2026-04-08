@@ -48,9 +48,30 @@ def create_app(config_class=Config):
     with app.app_context():
         db.create_all()
         _migrate_db()
+        _seed_settings()
         seed_database(app)
 
     return app
+
+
+def _seed_settings():
+    """Insert default platform settings if they don't exist yet."""
+    import json
+    from models import PlatformSetting
+    defaults = {
+        "categories": ["Bakery", "Restaurant", "Grocery", "Cafe", "Fast Food", "Sweets", "General"],
+        "min_discount_percent": 20,
+        "max_discount_percent": 80,
+        "low_stock_threshold": 2,
+        "notification_order_placed":    "Order {ref} placed! Head to {shop} between {pickup_start}–{pickup_end} to pick up your '{item}'. Show your QR code at the counter.",
+        "notification_order_confirmed": "Great news! Your order {ref} has been confirmed by the shop. Head over and show your QR code!",
+        "notification_order_picked_up": "Enjoy your meal! Order {ref} — '{item}' has been picked up. Thanks for choosing Tejam and helping reduce food waste!",
+        "notification_order_cancelled": "Your order {ref} for '{item}' was cancelled by the shop. Sorry for the inconvenience!",
+    }
+    for key, value in defaults.items():
+        if not PlatformSetting.query.filter_by(key=key).first():
+            PlatformSetting.set(key, value)
+    db.session.commit()
 
 
 def _migrate_db():
@@ -62,6 +83,7 @@ def _migrate_db():
             "ALTER TABLE reviews ADD COLUMN food_item_id INTEGER REFERENCES food_items(id)",
             "ALTER TABLE orders ADD COLUMN order_ref VARCHAR(12)",
             "ALTER TABLE food_items ADD COLUMN is_archived BOOLEAN DEFAULT 0",
+            "ALTER TABLE users ADD COLUMN is_verified BOOLEAN DEFAULT 0",
         ]:
             try:
                 conn.execute(text(stmt))
@@ -79,13 +101,19 @@ def seed_database(app):
 
     password_hash = generate_password_hash("password123").decode("utf-8")
 
-    # Ensure admin always exists
-    if not User.query.filter_by(email="admin@tejam.uz").first():
+    # Ensure admin always exists and is verified
+    admin = User.query.filter_by(email="admin@tejam.uz").first()
+    if not admin:
         admin = User(email="admin@tejam.uz", password_hash=password_hash,
-                     role="admin", name="Tejam Admin", phone="+998900000000")
+                     role="admin", name="Tejam Admin", phone="+998900000000",
+                     is_verified=True)
         db.session.add(admin)
         db.session.commit()
         print("Admin user created.")
+    elif not admin.is_verified:
+        admin.is_verified = True
+        db.session.commit()
+        print("Admin user marked as verified.")
 
     if User.query.count() > 1:
         return
@@ -93,11 +121,11 @@ def seed_database(app):
     print("Seeding fresh database...")
 
     # ── SHOP ACCOUNTS ────────────────────────────────────────────────────────
-    u_korzinka   = User(email="korzinka@tejam.uz",   password_hash=password_hash, role="shop", name="Korzinka",    phone="+998781230010")
-    u_sofia      = User(email="sofia@tejam.uz",      password_hash=password_hash, role="shop", name="Sofia",       phone="+998781230030")
-    u_tarnov     = User(email="tarnov@tejam.uz",     password_hash=password_hash, role="shop", name="Tarnov",      phone="+998781230040")
-    u_dietbistro = User(email="dietbistro@tejam.uz", password_hash=password_hash, role="shop", name="Diet Bistro", phone="+998781230050")
-    u_feedup     = User(email="feedup@tejam.uz",     password_hash=password_hash, role="shop", name="Feed UP",     phone="+998781230060")
+    u_korzinka   = User(email="korzinka@tejam.uz",   password_hash=password_hash, role="shop", name="Korzinka",    phone="+998781230010", is_verified=True)
+    u_sofia      = User(email="sofia@tejam.uz",      password_hash=password_hash, role="shop", name="Sofia",       phone="+998781230030", is_verified=True)
+    u_tarnov     = User(email="tarnov@tejam.uz",     password_hash=password_hash, role="shop", name="Tarnov",      phone="+998781230040", is_verified=True)
+    u_dietbistro = User(email="dietbistro@tejam.uz", password_hash=password_hash, role="shop", name="Diet Bistro", phone="+998781230050", is_verified=True)
+    u_feedup     = User(email="feedup@tejam.uz",     password_hash=password_hash, role="shop", name="Feed UP",     phone="+998781230060", is_verified=True)
 
     # ── CUSTOMER ACCOUNTS ────────────────────────────────────────────────────
     customers_data = [
@@ -114,7 +142,7 @@ def seed_database(app):
     ]
     customers = []
     for name, email, phone in customers_data:
-        u = User(email=email, password_hash=password_hash, role="customer", name=name, phone=phone)
+        u = User(email=email, password_hash=password_hash, role="customer", name=name, phone=phone, is_verified=True)
         customers.append(u)
 
     all_users = [u_korzinka, u_sofia, u_tarnov, u_dietbistro, u_feedup] + customers

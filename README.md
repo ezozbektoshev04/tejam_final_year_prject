@@ -208,7 +208,7 @@ The frontend starts on **http://localhost:5173**.
 ### Admin
 | Email | Password | Portal |
 |-------|----------|--------|
-| admin@tejam.uz | admin123 | /admin/login |
+| admin@tejam.uz | password123 | /admin/login |
 
 ### Customers
 | Email | Password |

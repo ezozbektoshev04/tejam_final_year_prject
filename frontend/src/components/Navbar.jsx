@@ -81,6 +81,13 @@ export default function Navbar() {
                         {user.role}
                       </span>
                     </div>
+                    <Link
+                      to="/profile"
+                      onClick={() => setDropdownOpen(false)}
+                      className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                    >
+                      Profile & settings
+                    </Link>
                     <button
                       onClick={handleLogout}
                       className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
@@ -166,6 +173,13 @@ export default function Navbar() {
               {user ? (
                 <div>
                   <p className="text-sm text-gray-500 py-1">{user.name}</p>
+                  <Link
+                    to="/profile"
+                    onClick={() => setMobileOpen(false)}
+                    className="block text-sm text-gray-700 font-medium py-2"
+                  >
+                    Profile & settings
+                  </Link>
                   <button onClick={handleLogout} className="text-sm text-red-600 font-medium py-2">
                     Sign out
                   </button>
