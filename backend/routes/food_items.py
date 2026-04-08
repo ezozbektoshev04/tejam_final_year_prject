@@ -74,6 +74,7 @@ def create_item():
         shop_id=shop_id,
         name=data["name"],
         description=data.get("description", ""),
+        contents_hint=data.get("contents_hint", ""),
         original_price=float(data["original_price"]),
         discounted_price=float(data["discounted_price"]),
         quantity=int(data.get("quantity", 1)),
@@ -109,7 +110,7 @@ def update_item(item_id):
             return jsonify({"error": "Cannot activate a listing with 0 quantity. Update the quantity first."}), 400
 
     updatable = [
-        "name", "description", "original_price", "discounted_price",
+        "name", "description", "contents_hint", "original_price", "discounted_price",
         "quantity", "pickup_start", "pickup_end", "image_url", "is_available"
     ]
     for field in updatable:

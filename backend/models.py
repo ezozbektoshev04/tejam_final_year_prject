@@ -91,6 +91,7 @@ class FoodItem(db.Model):
     pickup_start = db.Column(db.String(10))  # e.g. "17:00"
     pickup_end = db.Column(db.String(10))    # e.g. "20:00"
     image_url = db.Column(db.String(500))
+    contents_hint = db.Column(db.Text)  # "May include: bread, pastries, sweets"
     is_available = db.Column(db.Boolean, default=True)
     is_archived = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -109,6 +110,7 @@ class FoodItem(db.Model):
             "pickup_start": self.pickup_start,
             "pickup_end": self.pickup_end,
             "image_url": self.image_url,
+            "contents_hint": self.contents_hint,
             "is_available": self.is_available,
             "is_archived": self.is_archived,
             "created_at": self.created_at.isoformat(),
@@ -148,6 +150,8 @@ class Order(db.Model):
             "shop_address": shop.address if shop else None,
             "shop_city": shop.city if shop else None,
             "pickup_token": self.pickup_token,
+            "pickup_start": item.pickup_start if item else None,
+            "pickup_end": item.pickup_end if item else None,
             "quantity": self.quantity,
             "total_price": self.total_price,
             "status": self.status,

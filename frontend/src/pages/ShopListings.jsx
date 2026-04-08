@@ -7,7 +7,7 @@ function formatPrice(price) {
 }
 
 const EMPTY_FORM = {
-  name: '', description: '', original_price: '', discounted_price: '',
+  name: '', description: '', contents_hint: '', original_price: '', discounted_price: '',
   quantity: 1, pickup_start: '17:00', pickup_end: '20:00',
   image_url: '', is_available: true,
 }
@@ -64,6 +64,7 @@ export default function ShopListings() {
     setForm({
       name: item.name,
       description: item.description || '',
+      contents_hint: item.contents_hint || '',
       original_price: item.original_price,
       discounted_price: item.discounted_price,
       quantity: item.quantity,
@@ -91,11 +92,15 @@ export default function ShopListings() {
   }
 
   const handleAIDescribe = async () => {
-    if (!form.name) { setError('Enter a name first'); return }
+    if (!form.name) { setError('Enter a bag name first'); return }
     setAiLoading(true)
     try {
       const res = await api.post('/ai/describe', { name: form.name, category: 'Uzbek food' })
-      setForm(f => ({ ...f, description: res.data.description }))
+      setForm(f => ({
+        ...f,
+        description: res.data.description || f.description,
+        contents_hint: res.data.contents_hint || f.contents_hint,
+      }))
     } catch {
       setError('AI service unavailable.')
     } finally {
@@ -219,7 +224,7 @@ export default function ShopListings() {
             {visibleItems.length} active · {visibleArchived.length} archived
           </p>
         </div>
-        <button onClick={openCreate} className="btn-primary">+ Add listing</button>
+        <button onClick={openCreate} className="btn-primary">+ Add surprise bag</button>
       </div>
 
       {/* Branch selector */}
@@ -280,10 +285,10 @@ export default function ShopListings() {
       ) : activeTab === 'active' ? (
         visibleItems.length === 0 ? (
           <div className="text-center py-20">
-            <div className="text-6xl mb-4">🍽️</div>
-            <h2 className="text-xl font-semibold text-gray-700">No active listings</h2>
-            <p className="text-gray-400 mt-2 mb-5">Create your first food listing to start selling</p>
-            <button onClick={openCreate} className="btn-primary">Create listing</button>
+            <div className="text-6xl mb-4">🎁</div>
+            <h2 className="text-xl font-semibold text-gray-700">No active surprise bags</h2>
+            <p className="text-gray-400 mt-2 mb-5">Create your first surprise bag to start saving food and earning</p>
+            <button onClick={openCreate} className="btn-primary">Create surprise bag</button>
           </div>
         ) : (
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -324,8 +329,15 @@ export default function ShopListings() {
                     )}
                   </div>
                   <div className="p-4">
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <span className="text-xs bg-amber-100 text-amber-700 font-semibold px-2 py-0.5 rounded-full">🎁 Surprise Bag</span>
+                    </div>
                     <h3 className="font-semibold text-gray-900 line-clamp-1">{item.name}</h3>
-                    <p className="text-xs text-gray-400 mt-0.5 line-clamp-2">{item.description}</p>
+                    {item.contents_hint ? (
+                      <p className="text-xs text-amber-700 mt-0.5 line-clamp-1">{item.contents_hint}</p>
+                    ) : (
+                      <p className="text-xs text-gray-400 mt-0.5 line-clamp-2">{item.description}</p>
+                    )}
                     <div className="flex items-center gap-2 mt-2">
                       <span className="text-primary-600 font-bold text-sm">{formatPrice(item.discounted_price)}</span>
                       <span className="text-xs text-gray-400 line-through">{formatPrice(item.original_price)}</span>
@@ -419,9 +431,12 @@ export default function ShopListings() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-bold text-gray-900">
-                {editItem ? 'Edit listing' : 'New listing'}
-              </h2>
+              <div>
+                <h2 className="text-lg font-bold text-gray-900">
+                  {editItem ? 'Edit surprise bag' : 'New surprise bag'}
+                </h2>
+                <p className="text-xs text-gray-400 mt-0.5">Customers see what might be inside — exact contents vary daily</p>
+              </div>
               <button onClick={() => setModalOpen(false)} className="text-gray-400 hover:text-gray-600">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -452,9 +467,9 @@ export default function ShopListings() {
               )}
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Item name *</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Bag name *</label>
                 <input type="text" name="name" value={form.name} onChange={handleChange}
-                  className="input-field" placeholder="e.g. Freshly baked samsa" required />
+                  className="input-field" placeholder="e.g. Morning Pastry Surprise Bag" required />
               </div>
 
               <div>
@@ -466,7 +481,17 @@ export default function ShopListings() {
                   </button>
                 </div>
                 <textarea name="description" value={form.description} onChange={handleChange}
-                  className="input-field resize-none" rows={3} placeholder="Describe your food item…" />
+                  className="input-field resize-none" rows={2} placeholder="Tell customers about this bag — what type of food, when it's made, why it's a good deal…" />
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-sm font-medium text-gray-700">What's inside? (contents hint)</label>
+                  <span className="text-xs text-gray-400">filled by AI generate above</span>
+                </div>
+                <input type="text" name="contents_hint" value={form.contents_hint} onChange={handleChange}
+                  className="input-field" placeholder="May include: bread, pastries, sweets, or savory bites" />
+                <p className="text-xs text-gray-400 mt-1">Shown to customers as a hint — not a guarantee. Exact contents vary daily.</p>
               </div>
 
               <div className="grid grid-cols-2 gap-3">

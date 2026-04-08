@@ -133,35 +133,49 @@ def generate_description():
         return jsonify({"error": "No data provided"}), 400
 
     name = data.get("name", "")
-    ingredients = data.get("ingredients", "")
     category = data.get("category", "food")
 
     client = get_gemini_client()
     if not client:
         return jsonify({
-            "description": f"Fresh {name} — prepared with care and available at a special discounted price. Perfect for a quick and delicious meal!"
+            "description": f"Today's {name} — a surprise bag of surplus food from our kitchen, always worth more than the price. Freshly prepared and ready for pickup.",
+            "contents_hint": f"May include: assorted {category.lower()} items prepared today",
         })
 
-    prompt = f"""You are helping a food shop in Uzbekistan write an appealing description for their surplus food listing on Tejam marketplace.
+    prompt = f"""You are helping a food shop in Uzbekistan create a Surprise Bag listing on Tejam marketplace (like Too Good To Go).
 
-Food item: {name}
+Bag name: {name}
 Category: {category}
-{f"Ingredients: {ingredients}" if ingredients else ""}
 
-Write a short, appetizing description (2-3 sentences) that:
-1. Highlights the freshness and quality
-2. Mentions it's available at a discounted price (surplus food)
-3. Sounds warm and inviting
-4. Is appropriate for Uzbek food culture
+Generate TWO things:
+1. A short description (2-3 sentences) that:
+   - Explains this is a surprise bag of surplus food
+   - Highlights freshness and value
+   - Sounds warm and inviting
+   - Does NOT promise specific exact contents
 
-Return only the description text, no extra formatting."""
+2. A contents_hint (1 sentence starting with "May include:") that lists 3-5 typical items that MIGHT be in this bag, matching the bag name and category.
+
+Respond in JSON only:
+{{
+  "description": "<2-3 sentence description>",
+  "contents_hint": "May include: <item1>, <item2>, <item3>..."
+}}
+
+Return only valid JSON, no markdown."""
 
     try:
-        description = gemini_generate(client, prompt)
-        return jsonify({"description": description})
-    except Exception as e:
+        raw = gemini_generate(client, prompt)
+        clean = raw.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+        result = json.loads(clean)
         return jsonify({
-            "description": f"Fresh {name} — prepared with care and available at a special discounted price. Perfect for a quick and delicious meal!"
+            "description": result.get("description", ""),
+            "contents_hint": result.get("contents_hint", ""),
+        })
+    except Exception:
+        return jsonify({
+            "description": f"Today's {name} — a surprise bag of surplus food from our kitchen, always worth more than the price. Freshly prepared and ready for pickup.",
+            "contents_hint": f"May include: assorted {category.lower()} items prepared today",
         })
 
 

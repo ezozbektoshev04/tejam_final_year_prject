@@ -27,10 +27,13 @@ export default function FoodCard({ item }) {
             🍽️
           </div>
         )}
-        {/* Discount badge */}
-        <div className="absolute top-2 left-2">
+        {/* Surprise Bag badge */}
+        <div className="absolute top-2 left-2 flex flex-col gap-1">
           <span className="badge bg-primary-700 text-white font-bold text-xs px-2 py-1 rounded-full">
             -{discount}%
+          </span>
+          <span className="badge bg-amber-500 text-white font-semibold text-xs px-2 py-1 rounded-full">
+            🎁 Surprise Bag
           </span>
         </div>
         {/* Low stock */}

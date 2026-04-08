@@ -173,8 +173,22 @@ export default function FoodDetail() {
             </span>
           </div>
 
+          <span className="inline-flex items-center gap-1 mt-2 bg-amber-50 text-amber-700 text-xs font-semibold px-3 py-1 rounded-full border border-amber-200">
+            🎁 Surprise Bag
+          </span>
+
           {item.description && (
             <p className="text-gray-600 mt-4 leading-relaxed">{item.description}</p>
+          )}
+
+          {item.contents_hint && (
+            <div className="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-xl">
+              <p className="text-sm font-semibold text-amber-800 mb-1">What's inside?</p>
+              <p className="text-sm text-amber-700">{item.contents_hint}</p>
+              <p className="text-xs text-amber-500 mt-2 italic">
+                Exact contents vary daily. This is a surprise bag — items are selected by the shop based on what's available.
+              </p>
+            </div>
           )}
 
           {/* Details */}

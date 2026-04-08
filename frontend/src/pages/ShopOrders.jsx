@@ -13,6 +13,27 @@ function formatPrice(p) {
   return new Intl.NumberFormat('uz-UZ').format(Math.round(p)) + ' UZS'
 }
 
+function getPaymentStatus(order) {
+  const { payment_method, status } = order
+  if (status === 'pending_payment') {
+    return { label: '⏳ Awaiting payment', color: 'bg-orange-100 text-orange-700', paid: false }
+  }
+  if (status === 'cancelled') {
+    if (payment_method === 'online') {
+      return { label: '↩ Refunded', color: 'bg-red-100 text-red-600', paid: false }
+    }
+    return { label: '✕ Cancelled', color: 'bg-gray-100 text-gray-500', paid: false }
+  }
+  if (payment_method === 'online') {
+    return { label: '✅ Paid online', color: 'bg-green-100 text-green-700', paid: true }
+  }
+  // cash
+  if (status === 'picked_up') {
+    return { label: '✅ Cash collected', color: 'bg-green-100 text-green-700', paid: true }
+  }
+  return { label: '💵 Pay at pickup', color: 'bg-gray-100 text-gray-600', paid: false }
+}
+
 const PERIOD_OPTIONS = [
   { label: 'All time', value: '' },
   { label: 'Today',    value: '1d' },
@@ -116,10 +137,12 @@ export default function ShopOrders() {
     setSearch(searchInput)
   }
 
-  const completedOrders = orders.filter(o => o.status === 'picked_up' || o.status === 'confirmed')
-  const pendingCount    = orders.filter(o => o.status === 'pending').length
-  const totalRevenue    = completedOrders.reduce((s, o) => s + o.total_price, 0)
-  const totalPages      = Math.ceil(total / PER_PAGE)
+  const completedOrders    = orders.filter(o => o.status === 'picked_up' || o.status === 'confirmed')
+  const pendingCount       = orders.filter(o => o.status === 'pending').length
+  const awaitingPayment    = orders.filter(o => o.status === 'pending_payment').length
+  const paidOnlineCount    = orders.filter(o => o.payment_method === 'online' && o.status !== 'pending_payment' && o.status !== 'cancelled').length
+  const totalRevenue       = completedOrders.reduce((s, o) => s + o.total_price, 0)
+  const totalPages         = Math.ceil(total / PER_PAGE)
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -130,7 +153,7 @@ export default function ShopOrders() {
       </div>
 
       {/* Summary strip */}
-      <div className="grid grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
         <div className="card p-4 text-center">
           <p className="text-2xl font-bold text-gray-900">{total}</p>
           <p className="text-xs text-gray-500 mt-0.5">Matching orders</p>
@@ -141,9 +164,18 @@ export default function ShopOrders() {
         </div>
         <div className="card p-4 text-center relative">
           <p className="text-2xl font-bold text-yellow-600">{pendingCount}</p>
-          <p className="text-xs text-gray-500 mt-0.5">Pending (this page)</p>
+          <p className="text-xs text-gray-500 mt-0.5">Pending action</p>
           {pendingCount > 0 && (
             <span className="absolute top-2 right-2 w-2 h-2 bg-yellow-400 rounded-full" />
+          )}
+        </div>
+        <div className="card p-4 text-center relative">
+          <p className="text-2xl font-bold text-green-600">{paidOnlineCount}</p>
+          <p className="text-xs text-gray-500 mt-0.5">Paid online</p>
+          {awaitingPayment > 0 && (
+            <span className="absolute top-2 right-2 flex items-center gap-1">
+              <span className="text-xs text-orange-600 font-semibold">{awaitingPayment} pending</span>
+            </span>
           )}
         </div>
       </div>
@@ -264,6 +296,7 @@ export default function ShopOrders() {
               <tbody className="divide-y divide-gray-100">
                 {orders.map(order => {
                   const sc = STATUS_CONFIG[order.status]
+                  const ps = getPaymentStatus(order)
                   const isExpanded = expandedId === order.id
                   return (
                     <>
@@ -293,8 +326,8 @@ export default function ShopOrders() {
                           {formatPrice(order.total_price)}
                         </td>
                         <td className="px-4 py-3">
-                          <span className={`badge text-xs ${order.payment_method === 'online' ? 'bg-blue-50 text-blue-700' : 'bg-gray-100 text-gray-600'}`}>
-                            {order.payment_method === 'online' ? '💳 Online' : '💵 Cash'}
+                          <span className={`badge text-xs font-medium ${ps.color}`}>
+                            {ps.label}
                           </span>
                         </td>
                         <td className="px-4 py-3">
@@ -317,7 +350,7 @@ export default function ShopOrders() {
                       {isExpanded && (
                         <tr key={`${order.id}-expanded`} className="bg-primary-50">
                           <td colSpan={9} className="px-6 py-4">
-                            <div className="grid sm:grid-cols-3 gap-4 text-sm">
+                            <div className="grid sm:grid-cols-4 gap-4 text-sm">
                               <div>
                                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Pickup window</p>
                                 <p className="text-gray-800">{order.pickup_start || '—'} – {order.pickup_end || '—'}</p>
@@ -326,12 +359,24 @@ export default function ShopOrders() {
                                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Order ref</p>
                                 <p className="font-mono text-sm font-bold text-gray-800">{order.order_ref}</p>
                               </div>
-                              {order.notes && (
+                              <div>
+                                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Payment status</p>
+                                <span className={`badge text-xs font-medium ${ps.color}`}>{ps.label}</span>
+                                <p className="text-xs text-gray-400 mt-1">
+                                  Method: {order.payment_method === 'online' ? '💳 Online (Stripe)' : '💵 Cash'}
+                                </p>
+                              </div>
+                              {order.notes ? (
                                 <div>
                                   <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Customer notes</p>
                                   <p className="text-gray-700">{order.notes}</p>
                                 </div>
-                              )}
+                              ) : order.pickup_token ? (
+                                <div>
+                                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Pickup token</p>
+                                  <p className="font-mono text-xs text-gray-600 bg-white px-2 py-1 rounded border border-gray-200 break-all">{order.pickup_token}</p>
+                                </div>
+                              ) : null}
                             </div>
                           </td>
                         </tr>
