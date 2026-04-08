@@ -56,6 +56,7 @@ Shop owners receive:
 - Manage all customer accounts and shop partners
 - Platform-wide stats: revenue, orders, listings, active shops
 - Toggle any shop branch active/inactive
+- **Platform settings** — manage categories, discount thresholds, low stock threshold, notification templates
 
 ### Payments
 - **Stripe integration** (test mode) — full card checkout flow with Stripe hosted page
@@ -72,6 +73,7 @@ Shop owners receive:
 | Database  | SQLite (via SQLAlchemy) |
 | Payments  | Stripe Checkout (test mode) via `stripe` Python SDK |
 | AI        | Google Gemini API (`gemini-2.0-flash`) via `google-genai` |
+| Email     | Gmail SMTP via Python built-in `smtplib` (no extra package) |
 | Maps      | Yandex Maps JS API 2.1 (item detail embed + Browse map tab) |
 | Reports   | openpyxl (Excel export) |
 
@@ -81,10 +83,10 @@ Shop owners receive:
 tejam/
 ├── backend/
 │   ├── app.py              # Flask app factory, DB migration, seed data
-│   ├── models.py           # SQLAlchemy models (User, Shop, FoodItem, Order, Review, Notification)
+│   ├── models.py           # SQLAlchemy models (User, Shop, FoodItem, Order, Review, Notification, VerificationCode, PlatformSetting)
 │   ├── config.py           # Config class (keys, CORS, upload settings)
 │   ├── routes/
-│   │   ├── auth.py         # Register / login / me
+│   │   ├── auth.py         # Register / login / verify-email / forgot-password / reset-password / me
 │   │   ├── shops.py        # Shop CRUD, /my returns all branches
 │   │   ├── food_items.py   # Food item CRUD + archive/restore endpoints
 │   │   ├── orders.py       # Orders, QR pickup, stats, notifications at every stage
@@ -96,6 +98,7 @@ tejam/
 │   │   └── uploads.py      # Image upload / serve
 │   ├── utils/
 │   │   └── notifications.py # create_notification helper
+│   │   └── email.py        # Gmail SMTP email sender (verification + password reset)
 │   ├── uploads/            # Uploaded food images (gitignored)
 │   ├── requirements.txt
 │   └── .env
@@ -115,10 +118,13 @@ tejam/
     │   │   ├── ShopOrders.jsx      # Shop orders with filters and pagination
     │   │   ├── AIAssistant.jsx     # Persistent AI chat (shop + customer modes)
     │   │   ├── PickupConfirm.jsx   # QR scan page for shop staff
-    │   │   ├── AdminPanel.jsx      # Admin dashboard (Overview/Customers/Shops)
+    │   │   ├── AdminPanel.jsx      # Admin dashboard (Overview/Customers/Shops/Settings)
     │   │   ├── AdminLogin.jsx      # Separate admin login portal
-    │   │   ├── Login.jsx
-    │   │   └── Register.jsx
+    │   │   ├── Login.jsx           # Split-panel login with inline validation
+    │   │   ├── Register.jsx        # Two-step registration with password strength bar
+    │   │   ├── VerifyEmail.jsx     # 6-digit email verification with resend + cooldown
+    │   │   ├── ForgotPassword.jsx  # Forgot/reset password flow via email code
+    │   │   └── Profile.jsx         # Profile management (name, email, phone, password)
     │   ├── components/
     │   │   ├── Navbar.jsx          # White navbar, role-aware links, notification bell
     │   │   ├── NotificationBell.jsx # Bell icon, unread badge, 10s polling
@@ -132,6 +138,7 @@ tejam/
     │   │   └── AuthContext.jsx     # JWT auth state, login/logout (clears chat history)
     │   ├── utils/
     │   │   ├── distance.js         # Haversine formula for GPS sorting
+    │   │   ├── validate.js         # Inline form validation helpers (email, password, phone, required)
     │   │   └── yandexMaps.js       # Singleton Yandex Maps script loader (prevents double-injection)
     │   └── api/
     │       └── axios.js            # Axios instance with JWT + 401 interceptors
@@ -149,6 +156,7 @@ tejam/
 - A Stripe account (free) for payment testing
 - A Google Gemini API key (optional — free at https://aistudio.google.com)
 - A Yandex Maps API key (optional — free at https://developer.tech.yandex.ru)
+- A Gmail account with 2-Step Verification enabled (for email sending)
 
 ### Backend Setup
 
@@ -201,7 +209,7 @@ cp .env.example .env
 npm run dev
 ```
 
-The frontend starts on **http://localhost:5173**.
+The frontend starts on **http://localhost:5174**.
 
 ## Demo Accounts
 
@@ -239,6 +247,8 @@ GEMINI_API_KEY=AIza...                        # Optional — AI features (gemini
 DATABASE_URL=sqlite:///tejam.db
 STRIPE_SECRET_KEY=sk_test_...                 # Required for online payments
 FRONTEND_URL=http://localhost:5173            # Used for Stripe redirect URLs
+GMAIL_USER=you@gmail.com                      # Gmail address for sending emails
+GMAIL_APP_PASSWORD=xxxx xxxx xxxx xxxx        # Gmail App Password (Google Account → Security → App passwords)
 ```
 
 `frontend/.env`:
@@ -268,9 +278,14 @@ CVC:          Any 3 digits
 ### Auth (`/api/auth`)
 | Method | Path | Description |
 |--------|------|-------------|
-| POST | `/register` | Register customer or shop |
-| POST | `/login` | Login → JWT token |
+| POST | `/register` | Register customer or shop — sends verification email |
+| POST | `/verify-email` | Verify 6-digit code → returns JWT |
+| POST | `/resend-code` | Resend verification or reset code |
+| POST | `/login` | Login → JWT token (blocks unverified accounts) |
+| POST | `/forgot-password` | Send password reset code to email |
+| POST | `/reset-password` | Reset password with code |
 | GET | `/me` | Current user + shops array |
+| PUT | `/me` | Update profile (name, email, phone, password) |
 
 ### Shops (`/api/shops`)
 | Method | Path | Description |
@@ -338,6 +353,8 @@ CVC:          Any 3 digits
 | DELETE | `/users/:id` | Delete a user account |
 | GET | `/shops` | All shops with owner and order counts |
 | PUT | `/shops/:id/toggle` | Toggle shop active/inactive |
+| GET | `/settings` | Get platform settings |
+| PUT | `/settings` | Update platform settings (categories, thresholds, notification templates) |
 
 ### Uploads (`/uploads`)
 | Method | Path | Description |
@@ -397,7 +414,7 @@ cd backend && source venv/bin/activate && python app.py
 cd frontend && npm run dev
 ```
 
-Open **http://localhost:5173** in your browser.
+Open **http://localhost:5174** in your browser.
 
 ## Color Theme
 
