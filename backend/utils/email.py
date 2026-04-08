@@ -1,25 +1,25 @@
 import os
-import resend
-
-resend.api_key = os.getenv("RESEND_API_KEY", "")
-# Until a custom domain is verified on Resend, use their test sender.
-# Once you verify tejam.uz at resend.com/domains, change this to your domain email.
-FROM_EMAIL = os.getenv("FROM_EMAIL", "onboarding@resend.dev")
-
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 
 def _send(to: str, subject: str, html: str) -> bool:
-    """Send an email via Resend. Returns True on success, False if not configured."""
-    if not resend.api_key:
-        # Dev fallback — print to console
-        print(f"\n[EMAIL] To: {to}\n[EMAIL] Subject: {subject}\n[EMAIL] Code in body: see HTML\n")
+    """Send an email via Gmail SMTP. Falls back to console log if not configured."""
+    GMAIL_USER = os.getenv("GMAIL_USER", "")
+    GMAIL_APP_PASSWORD = os.getenv("GMAIL_APP_PASSWORD", "")
+    if not GMAIL_USER or not GMAIL_APP_PASSWORD:
+        print(f"\n[EMAIL] To: {to}\n[EMAIL] Subject: {subject}\n[EMAIL] (Gmail not configured — set GMAIL_USER and GMAIL_APP_PASSWORD)\n")
         return True
     try:
-        resend.Emails.send({
-            "from": f"Tejam <{FROM_EMAIL}>",
-            "to": [to],
-            "subject": subject,
-            "html": html,
-        })
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = subject
+        msg["From"] = f"Tejam <{GMAIL_USER}>"
+        msg["To"] = to
+        msg.attach(MIMEText(html, "html"))
+
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+            server.login(GMAIL_USER, GMAIL_APP_PASSWORD)
+            server.sendmail(GMAIL_USER, to, msg.as_string())
         return True
     except Exception as e:
         print(f"[EMAIL ERROR] {e}")
