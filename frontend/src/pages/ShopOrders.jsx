@@ -29,9 +29,9 @@ function getPaymentStatus(order) {
   }
   // cash
   if (status === 'picked_up') {
-    return { label: '✅ Cash collected', color: 'bg-green-100 text-green-700', paid: true }
+    return { label: '✅ Paid in store', color: 'bg-green-100 text-green-700', paid: true }
   }
-  return { label: '💵 Pay at pickup', color: 'bg-gray-100 text-gray-600', paid: false }
+  return { label: '🏪 Pay in store', color: 'bg-gray-100 text-gray-600', paid: false }
 }
 
 const PERIOD_OPTIONS = [
@@ -218,7 +218,7 @@ export default function ShopOrders() {
             onChange={e => setPayment(e.target.value)}
           >
             <option value="">All payments</option>
-            <option value="cash">Cash</option>
+            <option value="cash">Pay in store</option>
             <option value="online">Online</option>
           </select>
 
@@ -363,7 +363,7 @@ export default function ShopOrders() {
                                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Payment status</p>
                                 <span className={`badge text-xs font-medium ${ps.color}`}>{ps.label}</span>
                                 <p className="text-xs text-gray-400 mt-1">
-                                  Method: {order.payment_method === 'online' ? '💳 Online (Stripe)' : '💵 Cash'}
+                                  Method: {order.payment_method === 'online' ? '💳 Online (Stripe)' : '🏪 Pay in store'}
                                 </p>
                               </div>
                               {order.notes ? (

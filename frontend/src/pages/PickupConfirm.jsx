@@ -194,7 +194,7 @@ export default function PickupConfirm() {
               </div>
             )}
             <p className="text-center text-xs text-gray-400">
-              Collect <strong>{formatPrice(order.total_price)}</strong> in cash before confirming
+              Collect <strong>{formatPrice(order.total_price)}</strong> in store before confirming
             </p>
           </div>
         )}

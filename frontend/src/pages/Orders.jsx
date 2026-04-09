@@ -192,7 +192,7 @@ export default function Orders() {
                         <p className="font-medium">
                           {order.payment_method === 'online'
                             ? (order.status === 'pending_payment' ? '💳 Unpaid' : '💳 Paid online')
-                            : '💵 Cash in store'}
+                            : '🏪 Pay in store'}
                         </p>
                       </div>
                       {order.notes && (
