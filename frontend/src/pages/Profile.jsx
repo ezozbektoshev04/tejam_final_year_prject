@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
 import api from '../api/axios'
-import { validateEmail, validateRequired, validatePhone, validatePassword, validateConfirm } from '../utils/validate'
+import { validateEmail, validateRequired, validatePhone, validatePassword, validateConfirm, formatUzbekPhone } from '../utils/validate'
 import ImageUpload from '../components/ImageUpload'
 
 function formatPrice(p) {
@@ -227,9 +227,9 @@ export default function Profile() {
               type="text"
               className={`input-field ${accountErrors.phone ? 'border-red-400' : ''}`}
               value={accountForm.phone}
-              onChange={e => setAccountForm(f => ({ ...f, phone: e.target.value }))}
+              onChange={e => setAccountForm(f => ({ ...f, phone: formatUzbekPhone(e.target.value) }))}
               onBlur={() => setAccountTouched(t => ({ ...t, phone: true }))}
-              placeholder="+998 90 000 00 00"
+              placeholder="+998 90 123 45 67"
             />
             {accountErrors.phone && <p className="mt-1 text-xs text-red-500">{accountErrors.phone}</p>}
           </div>

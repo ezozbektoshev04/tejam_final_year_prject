@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { validateEmail, validatePassword, validateRequired, validatePhone } from '../utils/validate'
+import { validateEmail, validatePassword, validateRequired, validatePhone, formatUzbekPhone } from '../utils/validate'
 
 const CATEGORIES = ['Bakery', 'Restaurant', 'Grocery', 'Cafe', 'Fast Food', 'Sweets', 'General']
 
@@ -38,7 +38,10 @@ export default function Register() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
-  const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value })
+  const handleChange = (e) => {
+    const { name, value } = e.target
+    setForm({ ...form, [name]: name === 'phone' ? formatUzbekPhone(value) : value })
+  }
   const handleBlur = (e) => setTouched(t => ({ ...t, [e.target.name]: true }))
   const strength = getPasswordStrength(form.password)
 
