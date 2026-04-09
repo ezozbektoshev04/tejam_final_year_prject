@@ -64,6 +64,10 @@ export default function VerifyEmail() {
     setError('')
     try {
       const res = await api.post('/auth/verify-email', { email, code })
+      if (res.data.pending_approval) {
+        navigate('/pending-approval', { state: { email } })
+        return
+      }
       const { access_token, user } = res.data
       localStorage.setItem('access_token', access_token)
       localStorage.setItem('user', JSON.stringify(user))

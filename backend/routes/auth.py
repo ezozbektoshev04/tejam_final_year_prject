@@ -46,6 +46,7 @@ def register():
         name=data["name"],
         phone=data.get("phone", ""),
         is_verified=False,
+        is_approved=data["role"] != "shop",  # shops start unapproved
     )
     db.session.add(user)
     db.session.flush()
@@ -113,6 +114,14 @@ def verify_email():
     user.is_verified = True
     db.session.commit()
 
+    # Shop owners must wait for admin approval before accessing dashboard
+    if user.role == "shop" and not user.is_approved:
+        return jsonify({
+            "pending_approval": True,
+            "email": user.email,
+            "message": "Email verified! Your shop application is now under review. We'll notify you once it's approved.",
+        })
+
     access_token = create_access_token(identity=str(user.id))
     return jsonify({"access_token": access_token, "user": _user_response(user)})
 
@@ -162,6 +171,13 @@ def login():
         return jsonify({
             "error": "Email not verified. We've sent a new code to your email.",
             "unverified": True,
+            "email": user.email,
+        }), 403
+
+    if user.role == "shop" and not user.is_approved:
+        return jsonify({
+            "error": "Your shop account is pending admin approval. You'll be notified once it's reviewed.",
+            "pending_approval": True,
             "email": user.email,
         }), 403
 

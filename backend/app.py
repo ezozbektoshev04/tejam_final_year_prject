@@ -85,6 +85,7 @@ def _migrate_db():
             "ALTER TABLE food_items ADD COLUMN is_archived BOOLEAN DEFAULT 0",
             "ALTER TABLE users ADD COLUMN is_verified BOOLEAN DEFAULT 0",
             "ALTER TABLE food_items ADD COLUMN contents_hint TEXT",
+            "ALTER TABLE users ADD COLUMN is_approved BOOLEAN DEFAULT 1",
         ]:
             try:
                 conn.execute(text(stmt))

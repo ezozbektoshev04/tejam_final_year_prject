@@ -1,7 +1,7 @@
 import json
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from models import db, User, Shop, Order, FoodItem, PlatformSetting
+from models import db, User, Shop, Order, FoodItem, PlatformSetting, Notification
 
 admin_bp = Blueprint("admin", __name__)
 
@@ -24,7 +24,8 @@ def stats():
         return jsonify({"error": "Admin access required"}), 403
 
     total_customers = User.query.filter_by(role="customer").count()
-    total_shops = User.query.filter_by(role="shop").count()
+    total_shops = User.query.filter_by(role="shop", is_approved=True).count()
+    pending_shop_approvals = User.query.filter_by(role="shop", is_approved=False).count()
     total_orders = Order.query.count()
     total_listings = FoodItem.query.count()
     revenue = db.session.query(db.func.sum(Order.total_price)).filter(
@@ -37,6 +38,7 @@ def stats():
     return jsonify({
         "total_customers": total_customers,
         "total_shops": total_shops,
+        "pending_shop_approvals": pending_shop_approvals,
         "total_orders": total_orders,
         "total_listings": total_listings,
         "total_revenue": round(revenue),
@@ -155,6 +157,59 @@ def get_settings():
         except Exception:
             result[row.key] = row.value
     return jsonify(result)
+
+
+@admin_bp.route("/pending-shops", methods=["GET"])
+@jwt_required()
+def pending_shops():
+    if not require_admin():
+        return jsonify({"error": "Admin access required"}), 403
+
+    users = User.query.filter_by(role="shop", is_approved=False).order_by(User.created_at.desc()).all()
+    result = []
+    for u in users:
+        data = u.to_dict()
+        data["shops"] = [s.to_dict() for s in u.shops]
+        result.append(data)
+    return jsonify(result)
+
+
+@admin_bp.route("/approve-shop/<int:user_id>", methods=["POST"])
+@jwt_required()
+def approve_shop(user_id):
+    if not require_admin():
+        return jsonify({"error": "Admin access required"}), 403
+
+    user = User.query.get_or_404(user_id)
+    if user.role != "shop":
+        return jsonify({"error": "User is not a shop owner"}), 400
+
+    user.is_approved = True
+    notif = Notification(
+        user_id=user.id,
+        message="Your shop has been approved! You can now log in and start listing your surplus food.",
+        link="/dashboard",
+    )
+    db.session.add(notif)
+    db.session.commit()
+    return jsonify({"message": f"Shop owner '{user.name}' approved successfully."})
+
+
+@admin_bp.route("/reject-shop/<int:user_id>", methods=["DELETE"])
+@jwt_required()
+def reject_shop(user_id):
+    if not require_admin():
+        return jsonify({"error": "Admin access required"}), 403
+
+    user = User.query.get_or_404(user_id)
+    if user.role != "shop":
+        return jsonify({"error": "User is not a shop owner"}), 400
+    if user.is_approved:
+        return jsonify({"error": "Cannot reject an already approved shop"}), 400
+
+    db.session.delete(user)
+    db.session.commit()
+    return jsonify({"message": "Shop application rejected and account removed."})
 
 
 @admin_bp.route("/settings", methods=["PUT"])

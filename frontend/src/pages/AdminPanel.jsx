@@ -24,7 +24,7 @@ function StatCard({ title, value, sub, icon }) {
   )
 }
 
-const TABS = ['Overview', 'Customers', 'Shop Owners', 'Settings']
+const TABS = ['Overview', 'Pending Shops', 'Customers', 'Shop Owners', 'Settings']
 
 const NOTIF_KEYS = [
   { key: 'notification_order_placed',    label: 'Order placed (to customer)',    vars: '{ref}, {shop}, {pickup_start}, {pickup_end}, {item}' },
@@ -43,6 +43,9 @@ export default function AdminPanel() {
   const [loading, setLoading] = useState(true)
   const [deleting, setDeleting] = useState(null)
   const [toggling, setToggling] = useState(null)
+  const [pendingShops, setPendingShops] = useState([])
+  const [approving, setApproving] = useState(null)
+  const [rejecting, setRejecting] = useState(null)
 
   // Settings state
   const [settings, setSettings] = useState(null)
@@ -56,14 +59,16 @@ export default function AdminPanel() {
   const fetchAll = async () => {
     setLoading(true)
     try {
-      const [statsRes, custRes, shopRes] = await Promise.all([
+      const [statsRes, custRes, shopRes, pendingRes] = await Promise.all([
         api.get('/admin/stats'),
         api.get('/admin/users?role=customer'),
         api.get('/admin/shops'),
+        api.get('/admin/pending-shops'),
       ])
       setStats(statsRes.data)
       setCustomers(custRes.data)
       setShops(shopRes.data)
+      setPendingShops(pendingRes.data)
     } catch (err) {
       console.error(err)
     } finally {
@@ -124,6 +129,35 @@ export default function AdminPanel() {
 
   const handleTemplateSave = (key) => {
     saveSettings({ [key]: settings[key] })
+  }
+
+  const handleApproveShop = async (userId, name) => {
+    setApproving(userId)
+    try {
+      await api.post(`/admin/approve-shop/${userId}`)
+      const approved = pendingShops.find(u => u.id === userId)
+      setPendingShops(prev => prev.filter(u => u.id !== userId))
+      if (approved) setShops(prev => [...prev, { ...approved.shops?.[0], owner_name: approved.name, owner_email: approved.email, listing_count: 0, order_count: 0, is_active: true }])
+      setStats(s => s ? { ...s, pending_shop_approvals: Math.max(0, (s.pending_shop_approvals || 1) - 1), total_shops: (s.total_shops || 0) + 1 } : s)
+    } catch (err) {
+      alert(err.response?.data?.error || 'Failed to approve')
+    } finally {
+      setApproving(null)
+    }
+  }
+
+  const handleRejectShop = async (userId, name) => {
+    if (!window.confirm(`Reject and delete application from "${name}"? This cannot be undone.`)) return
+    setRejecting(userId)
+    try {
+      await api.delete(`/admin/reject-shop/${userId}`)
+      setPendingShops(prev => prev.filter(u => u.id !== userId))
+      setStats(s => s ? { ...s, pending_shop_approvals: Math.max(0, (s.pending_shop_approvals || 1) - 1) } : s)
+    } catch (err) {
+      alert(err.response?.data?.error || 'Failed to reject')
+    } finally {
+      setRejecting(null)
+    }
   }
 
   const handleDeleteUser = async (userId, name) => {
@@ -197,16 +231,21 @@ export default function AdminPanel() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit mb-8">
+      <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit mb-8 flex-wrap">
         {TABS.map(t => (
           <button
             key={t}
             onClick={() => setTab(t)}
-            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+            className={`relative px-4 py-2 rounded-md text-sm font-medium transition-colors ${
               tab === t ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
             }`}
           >
             {t}
+            {t === 'Pending Shops' && pendingShops.length > 0 && (
+              <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-bold">
+                {pendingShops.length}
+              </span>
+            )}
           </button>
         ))}
       </div>
@@ -216,7 +255,7 @@ export default function AdminPanel() {
         <div>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
             <StatCard title="Total customers" value={stats.total_customers} sub="registered accounts" icon="👤" />
-            <StatCard title="Partner branches" value={stats.total_shops} sub="shop owner accounts" icon="🏪" />
+            <StatCard title="Partner branches" value={stats.total_shops} sub={stats.pending_shop_approvals > 0 ? `${stats.pending_shop_approvals} pending approval` : 'approved accounts'} icon="🏪" />
             <StatCard title="Total orders" value={stats.total_orders} sub={`${stats.pending_orders} pending · ${stats.confirmed_orders} confirmed`} icon="📦" />
             <StatCard title="Revenue collected" value={formatPrice(stats.total_revenue)} sub="from picked-up orders" icon="💰" />
           </div>
@@ -254,6 +293,69 @@ export default function AdminPanel() {
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ── Pending Shops ── */}
+      {tab === 'Pending Shops' && (
+        <div>
+          <div className="flex items-center justify-between mb-4">
+            <p className="text-sm text-gray-500">{pendingShops.length} application{pendingShops.length !== 1 ? 's' : ''} awaiting review</p>
+          </div>
+          {pendingShops.length === 0 ? (
+            <div className="card p-10 text-center text-gray-400">
+              <p className="text-4xl mb-2">✅</p>
+              <p className="font-medium text-gray-600 mb-1">All caught up</p>
+              <p className="text-sm">No pending shop applications</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {pendingShops.map(u => {
+                const shop = u.shops?.[0]
+                return (
+                  <div key={u.id} className="card p-5">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex items-start gap-4 flex-1 min-w-0">
+                        <div className="w-11 h-11 bg-amber-100 rounded-xl flex items-center justify-center text-xl flex-shrink-0">
+                          🏪
+                        </div>
+                        <div className="min-w-0">
+                          <p className="font-semibold text-gray-900">{shop?.name || u.name}</p>
+                          <p className="text-sm text-gray-500 mt-0.5">{shop?.category} · {shop?.city}</p>
+                          {shop?.address && <p className="text-xs text-gray-400 mt-0.5">{shop.address}</p>}
+                          <div className="mt-2 flex flex-wrap gap-3 text-xs text-gray-500">
+                            <span>Owner: <span className="font-medium text-gray-700">{u.name}</span></span>
+                            <span>Email: <span className="font-medium text-gray-700">{u.email}</span></span>
+                            {u.phone && <span>Phone: <span className="font-medium text-gray-700">{u.phone}</span></span>}
+                            <span>Applied: <span className="font-medium text-gray-700">{new Date(u.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span></span>
+                          </div>
+                          {shop?.description && (
+                            <p className="mt-2 text-xs text-gray-500 italic">"{shop.description}"</p>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex gap-2 flex-shrink-0">
+                        <button
+                          onClick={() => handleApproveShop(u.id, u.name)}
+                          disabled={approving === u.id || rejecting === u.id}
+                          className="text-sm px-4 py-2 rounded-lg bg-primary-600 text-white hover:bg-primary-700 transition-colors disabled:opacity-50 font-medium"
+                        >
+                          {approving === u.id ? '…' : 'Approve'}
+                        </button>
+                        <button
+                          onClick={() => handleRejectShop(u.id, u.name)}
+                          disabled={approving === u.id || rejecting === u.id}
+                          className="text-sm px-4 py-2 rounded-lg border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 transition-colors disabled:opacity-50 font-medium"
+                        >
+                          {rejecting === u.id ? '…' : 'Reject'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
         </div>
       )}
 

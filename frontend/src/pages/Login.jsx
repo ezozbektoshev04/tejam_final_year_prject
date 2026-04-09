@@ -39,6 +39,10 @@ export default function Login() {
         navigate('/verify-email', { state: { email: form.email } })
         return
       }
+      if (err.response?.data?.pending_approval) {
+        navigate('/pending-approval', { state: { email: form.email } })
+        return
+      }
       setError(err.response?.data?.error || 'Login failed. Please try again.')
     } finally {
       setLoading(false)

@@ -21,6 +21,7 @@ class User(db.Model):
     name = db.Column(db.String(100), nullable=False)
     phone = db.Column(db.String(30))
     is_verified = db.Column(db.Boolean, default=False)
+    is_approved = db.Column(db.Boolean, default=True)  # False for new shop registrations until admin approves
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     shops = db.relationship("Shop", backref="owner", uselist=True, lazy=True)
@@ -34,6 +35,7 @@ class User(db.Model):
             "role": self.role,
             "name": self.name,
             "phone": self.phone,
+            "is_approved": self.is_approved,
             "created_at": self.created_at.isoformat(),
         }
 

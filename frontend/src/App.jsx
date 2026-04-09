@@ -20,6 +20,7 @@ import AdminLogin from './pages/AdminLogin'
 import Profile from './pages/Profile'
 import VerifyEmail from './pages/VerifyEmail'
 import ForgotPassword from './pages/ForgotPassword'
+import PendingApproval from './pages/PendingApproval'
 
 function Layout() {
   const location = useLocation()
@@ -34,6 +35,7 @@ function Layout() {
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/verify-email" element={<VerifyEmail />} />
+        <Route path="/pending-approval" element={<PendingApproval />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/browse" element={<Browse />} />
         <Route path="/food/:id" element={<FoodDetail />} />
