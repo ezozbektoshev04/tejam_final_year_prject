@@ -75,25 +75,27 @@ tejam_second/
     │   │   └── ProtectedRoute.jsx   # Role-based route guard
     │   ├── pages/
     │   │   ├── Home.jsx             # Landing page: featured listings + shops
-    │   │   ├── Browse.jsx           # Paginated food browse with filters
-    │   │   ├── FoodDetail.jsx       # Food item detail + order form
-    │   │   ├── Orders.jsx           # Customer orders: tabs, progress bar, QR, review
+    │   │   ├── Browse.jsx           # Paginated food browse with filters + AI recommendations
+    │   │   ├── FoodDetail.jsx       # Food item detail + order form (cash or online)
+    │   │   ├── Orders.jsx           # Customer orders: tabs, search/date filter, progress bar, QR, review
     │   │   ├── Profile.jsx          # Customer profile and account settings
-    │   │   ├── Register.jsx         # Registration (customer or shop)
-    │   │   ├── Login.jsx            # Login form
+    │   │   ├── Register.jsx         # Registration (customer or shop, two-step)
+    │   │   ├── Login.jsx            # Login form with demo account shortcuts
     │   │   ├── VerifyEmail.jsx      # Email verification code entry
     │   │   ├── ForgotPassword.jsx   # Password reset request + code entry
     │   │   ├── PendingApproval.jsx  # Shown to shops awaiting admin approval
     │   │   ├── PaymentSuccess.jsx   # Stripe redirect landing page
     │   │   ├── AIAssistant.jsx      # AI chat (role-aware live data)
-    │   │   ├── ShopDashboard.jsx    # Shop analytics dashboard + pending orders
-    │   │   ├── ShopOrders.jsx       # Shop full order management
+    │   │   ├── ShopDashboard.jsx    # Shop analytics: revenue, completion rate, cancellation rate
+    │   │   ├── ShopOrders.jsx       # Shop full order management with filters
     │   │   ├── ShopListings.jsx     # Shop listing CRUD
     │   │   ├── PickupConfirm.jsx    # QR scan confirmation page for shop staff
     │   │   ├── AdminPanel.jsx       # Admin: users, shops, earnings, settings
     │   │   └── AdminLogin.jsx       # Separate admin login page
     │   ├── utils/
-    │   │   └── dateTime.js          # Date formatting helpers
+    │   │   ├── dateTime.js          # Date formatting helpers
+    │   │   ├── validate.js          # Form validation helpers
+    │   │   └── distance.js          # Haversine distance calculation for "Near me"
     │   └── App.jsx                  # Route definitions
     └── package.json
 ```
@@ -199,13 +201,14 @@ Star rating (1–5) + comment, linked to a completed (picked_up) order. Automati
 
 ### Customer
 1. Register → receive 6-digit verification code by email → verify
-2. Browse food listings (filter by city, category, search, available now)
+2. Browse food listings (filter by city, category, search, available now, near me)
 3. Place order: **cash** (pay at pickup) or **online** (Stripe)
 4. Track order with progress bar: Order placed → Confirmed → Picked up
 5. Show QR code at pickup — shop scans to confirm
 6. Leave a star review after pickup
-7. Get AI-powered food recommendations based on order history
-8. Use AI chat assistant to find deals
+7. Search and filter order history by shop name, item name, or date range
+8. Get AI-powered food recommendations based on order history
+9. Use AI chat assistant to find deals
 
 ### Shop Owner
 1. Register with shop details → email verification → **wait for admin approval**
@@ -219,6 +222,7 @@ Star rating (1–5) + comment, linked to a completed (picked_up) order. Automati
    - Order status breakdown (pie chart)
    - Top items by orders (bar chart)
    - Revenue by category (bar chart)
+   - Completion rate and cancellation rate stats
    - Pending orders table with one-click confirm
 5. Manage all orders with filters (status, payment, date, search)
 6. Download Excel sales reports (configurable date range, hourly/daily/weekly)
@@ -275,12 +279,12 @@ Star rating (1–5) + comment, linked to a completed (picked_up) order. Automati
 ### Orders — `/api/orders`
 | Method | Path | Description |
 |---|---|---|
-| GET | `/` | List orders (customer: paginated + tab filter; shop: filtered + paginated) |
+| GET | `/` | List orders (customer: tab + search + date filter, paginated; shop: filtered + paginated) |
 | POST | `/` | Place cash order (commission applied automatically) |
 | PUT | `/<id>/status` | Update status: pending → confirmed → picked_up (shop only) |
 | DELETE | `/<id>` | Cancel order, restore stock (customer only) |
 | POST | `/<id>/review` | Submit review after pickup |
-| GET | `/stats` | Shop analytics: revenue chart, status breakdown, top items, category chart |
+| GET | `/stats` | Shop analytics: revenue, completion rate, cancellation rate, charts |
 | GET | `/pickup/<token>` | QR code public lookup (shows order + customer info) |
 | PUT | `/pickup/<token>/confirm` | Confirm pickup via QR scan (shop only) |
 
@@ -453,11 +457,13 @@ Seeded automatically on first run. Password for all: **`password123`**
 - **Surprise bag marketplace** — shops list surplus food as discounted bags with pickup windows
 - **Dual payment** — cash on pickup or Stripe online checkout with payment verification
 - **QR code pickup** — each order has a unique QR code; shop scans to confirm collection
+- **Order history search & filter** — customers can filter their orders by shop name, item name, or date range with live debounced search
+- **Shop analytics** — completion rate and cancellation rate stats alongside revenue, top items, and category charts
 - **Shop approval workflow** — new shops wait for admin approval before going live; email sent on decision
 - **Commission system** — 10% platform fee tracked per order, admin manages manual settlements with Excel export
 - **AI assistant (Gemini 2.0 Flash)** — context-aware chat with live data, auto-generated descriptions, price suggestions, personalized recommendations
 - **Excel exports** — shops export sales reports; admin exports earnings with monthly trend and per-shop breakdown
 - **In-app + email notifications** — key lifecycle events trigger both channels automatically
 - **Admin panel** — full platform management with analytics charts, configurable settings, and earnings dashboard
-- **Interactive maps** — shop locations on embedded maps
+- **Interactive maps** — shop locations on embedded maps, "Near me" sorting by distance
 - **Fully paginated** — food browse, customer orders, shop orders, and admin earnings all paginated

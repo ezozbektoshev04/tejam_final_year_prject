@@ -28,9 +28,13 @@ def list_orders():
         except ValueError:
             page, per_page = 1, 10
 
+        search    = request.args.get("search", "").strip()
+        start_str = request.args.get("start", "")
+        end_str   = request.args.get("end", "")
+
         base = Order.query.filter_by(customer_id=user_id)
 
-        # Status counts for tabs (always computed on full set)
+        # Status counts for tabs (always on full set, no search/date filter)
         active_statuses = ["pending_payment", "pending", "confirmed"]
         status_counts = {
             "active":    base.filter(Order.status.in_(active_statuses)).count(),
@@ -41,18 +45,43 @@ def list_orders():
             Order.customer_id == user_id, Order.status == "picked_up"
         ).scalar() or 0
 
-        # Apply tab filter
+        # Fetch all orders for this customer then filter in Python (avoids ORM join issues)
         tab = request.args.get("tab", "active")
-        query = base.order_by(Order.created_at.desc())
-        if tab == "active":
-            query = query.filter(Order.status.in_(active_statuses))
-        elif tab == "completed":
-            query = query.filter(Order.status == "picked_up")
-        elif tab == "cancelled":
-            query = query.filter(Order.status == "cancelled")
+        all_orders = base.order_by(Order.created_at.desc()).all()
 
-        total = query.count()
-        orders = query.offset((page - 1) * per_page).limit(per_page).all()
+        # Tab filter
+        if tab == "active":
+            all_orders = [o for o in all_orders if o.status in active_statuses]
+        elif tab == "completed":
+            all_orders = [o for o in all_orders if o.status == "picked_up"]
+        elif tab == "cancelled":
+            all_orders = [o for o in all_orders if o.status == "cancelled"]
+
+        # Search filter
+        if search:
+            sl = search.lower()
+            all_orders = [
+                o for o in all_orders
+                if (o.food_item and sl in o.food_item.name.lower())
+                or (o.food_item and o.food_item.shop and sl in o.food_item.shop.name.lower())
+            ]
+
+        # Date range filter
+        if start_str:
+            try:
+                start_dt = datetime.strptime(start_str, "%Y-%m-%d")
+                all_orders = [o for o in all_orders if o.created_at >= start_dt]
+            except ValueError:
+                pass
+        if end_str:
+            try:
+                end_dt = datetime.strptime(end_str, "%Y-%m-%d").replace(hour=23, minute=59, second=59)
+                all_orders = [o for o in all_orders if o.created_at <= end_dt]
+            except ValueError:
+                pass
+
+        total = len(all_orders)
+        orders = all_orders[(page - 1) * per_page : page * per_page]
         return jsonify({
             "orders": [o.to_dict() for o in orders],
             "total": total,
@@ -423,6 +452,11 @@ def shop_stats():
     total_orders     = len(all_orders)
     items_listed     = len(food_ids)
 
+    total_cancelled   = sum(1 for o in all_orders if o.status == "cancelled")
+    total_picked_up   = sum(1 for o in all_orders if o.status == "picked_up")
+    cancellation_rate = round(total_cancelled / total_orders * 100, 1) if total_orders > 0 else 0
+    conversion_rate   = round(total_picked_up / total_orders * 100, 1) if total_orders > 0 else 0
+
     # Revenue chart — one entry per day in selected range
     num_days = (range_end - range_start).days + 1
     daily_revenue = {}
@@ -476,6 +510,8 @@ def shop_stats():
         "total_orders":     total_orders,
         "items_listed":     items_listed,
         "avg_rating":       round(avg_rating, 2),
+        "cancellation_rate": cancellation_rate,
+        "conversion_rate":   conversion_rate,
         "revenue_chart":    revenue_chart,
         "status_chart":     status_chart,
         "category_chart":   category_chart,

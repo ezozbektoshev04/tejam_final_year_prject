@@ -199,7 +199,7 @@ export default function FoodDetail() {
                 <svg className="w-4 h-4 text-primary-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
-                <span>Pickup window: <strong>{item.pickup_start} – {item.pickup_end}</strong></span>
+                <span>Pickup: <strong>{item.pickup_start} – {item.pickup_end}</strong></span>
               </div>
             )}
             <div className="flex items-center gap-2 text-sm text-gray-600">
@@ -273,7 +273,7 @@ export default function FoodDetail() {
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
                       </svg>
-                      Pay in store
+                      Pay in cash
                     </button>
                   </div>
                   {paymentMethod === 'online' && (
@@ -340,7 +340,7 @@ export default function FoodDetail() {
                       </svg>
                       {paymentMethod === 'online' ? 'Redirecting to payment…' : 'Placing order…'}
                     </>
-                  ) : !item.is_available ? 'Sold out' : paymentMethod === 'online' ? 'Pay with Stripe' : 'Reserve & pay in store'}
+                  ) : !item.is_available ? 'Sold out' : paymentMethod === 'online' ? 'Pay online' : 'Pay in cash'}
                 </button>
 
                 {!user && (
@@ -358,7 +358,7 @@ export default function FoodDetail() {
       <div className="mt-10">
         <div className="flex items-center gap-4 mb-5">
           <h2 className="text-xl font-bold text-gray-900">
-            Reviews for this item
+            Reviews
           </h2>
           {item.review_count > 0 && (
             <div className="flex items-center gap-2">
@@ -397,7 +397,7 @@ export default function FoodDetail() {
         ) : (
           <div className="text-center py-10 bg-gray-50 rounded-xl border border-gray-100">
             <div className="text-4xl mb-2">⭐</div>
-            <p className="text-gray-500 text-sm">No reviews yet for this item.</p>
+            <p className="text-gray-500 text-sm">No reviews yet</p>
             <p className="text-gray-400 text-xs mt-1">Be the first to order and leave a review!</p>
           </div>
         )}

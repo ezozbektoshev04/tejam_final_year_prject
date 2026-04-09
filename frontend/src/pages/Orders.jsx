@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { QRCodeSVG } from 'qrcode.react'
 import api from '../api/axios'
@@ -23,7 +23,6 @@ function formatPrice(p) {
   return new Intl.NumberFormat('uz-UZ').format(Math.round(p)) + ' UZS'
 }
 
-// Progress steps for active orders
 const STEPS = ['Order placed', 'Confirmed', 'Picked up']
 function stepIndex(status) {
   if (status === 'pending_payment' || status === 'pending') return 0
@@ -82,11 +81,23 @@ export default function Orders() {
   const [reviewModal, setReviewModal] = useState(null)
   const [reviewForm, setReviewForm]   = useState({ rating: 5, comment: '' })
   const [reviewLoading, setReviewLoading] = useState(false)
+  // Search & date filter
+  const [search, setSearch]         = useState('')
+  const [dateFrom, setDateFrom]     = useState('')
+  const [dateTo, setDateTo]         = useState('')
+  const [fetchError, setFetchError] = useState('')
   const PER_PAGE = 10
+  const didMount = useRef(false)
+  const searchDebounce = useRef(null)
 
-  const fetchOrders = (pageNum = 1, tabKey = tab) => {
+  const fetchOrders = (pageNum = 1, tabKey = tab, searchVal = search, from = dateFrom, to = dateTo) => {
     setLoading(true)
-    api.get('/orders/', { params: { page: pageNum, per_page: PER_PAGE, tab: tabKey } })
+    setFetchError('')
+    const params = { page: pageNum, per_page: PER_PAGE, tab: tabKey }
+    if (searchVal) params.search = searchVal
+    if (from) params.start = from
+    if (to) params.end = to
+    api.get('/orders/', { params })
       .then(res => {
         const d = res.data
         setOrders(d.orders)
@@ -99,23 +110,53 @@ export default function Orders() {
       })
       .catch(err => {
         if (err.response?.status === 401 || err.response?.status === 403) {
-          // Stale or wrong-role token — force re-login
           localStorage.removeItem('access_token')
           localStorage.removeItem('user')
           navigate('/login')
         } else {
+          setFetchError('Failed to load orders. Please try again.')
           console.error(err)
         }
       })
       .finally(() => setLoading(false))
   }
 
-  useEffect(() => { fetchOrders(1, 'active') }, [])
+  useEffect(() => { fetchOrders(1, 'active') }, []) // eslint-disable-line
+
+  // Auto-search: debounced for text input
+  useEffect(() => {
+    if (!didMount.current) { didMount.current = true; return }
+    clearTimeout(searchDebounce.current)
+    searchDebounce.current = setTimeout(() => {
+      fetchOrders(1, tab, search, dateFrom, dateTo)
+    }, 400)
+    return () => clearTimeout(searchDebounce.current)
+  }, [search]) // eslint-disable-line
+
+  // Immediate filter on date change
+  useEffect(() => {
+    if (!didMount.current) return
+    fetchOrders(1, tab, search, dateFrom, dateTo)
+  }, [dateFrom, dateTo]) // eslint-disable-line
 
   const switchTab = (key) => {
     setTab(key)
     setExpanded(null)
-    fetchOrders(1, key)
+    fetchOrders(1, key, search, dateFrom, dateTo)
+  }
+
+  const handleSearchSubmit = (e) => {
+    e.preventDefault()
+    clearTimeout(searchDebounce.current)
+    fetchOrders(1, tab, search, dateFrom, dateTo)
+  }
+
+  const handleClearFilters = () => {
+    clearTimeout(searchDebounce.current)
+    setSearch('')
+    setDateFrom('')
+    setDateTo('')
+    fetchOrders(1, tab, '', '', '')
   }
 
   const handleCancel = async (orderId) => {
@@ -179,26 +220,66 @@ export default function Orders() {
         ))}
       </div>
 
+      {fetchError && (
+        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">
+          {fetchError}
+        </div>
+      )}
+
+      {/* Search & date filter */}
+      <form onSubmit={handleSearchSubmit} className="bg-white border border-gray-200 rounded-xl p-3 mb-4 flex flex-col sm:flex-row gap-2">
+        <div className="flex-1 relative">
+          <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+          <input
+            type="text"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search by shop or item…"
+            className="input-field pl-9 text-sm"
+          />
+        </div>
+        <input
+          type="date"
+          value={dateFrom}
+          onChange={e => setDateFrom(e.target.value)}
+          title="From date"
+          className="input-field text-sm w-auto"
+        />
+        <input
+          type="date"
+          value={dateTo}
+          onChange={e => setDateTo(e.target.value)}
+          title="To date"
+          className="input-field text-sm w-auto"
+        />
+        <button type="submit" className="btn-primary text-sm px-4">Apply</button>
+        {(search || dateFrom || dateTo) && (
+          <button type="button" onClick={handleClearFilters} className="btn-secondary text-sm px-3">Clear</button>
+        )}
+      </form>
+
       {/* Tabs */}
       <div className="flex gap-1 bg-gray-100 p-1 rounded-xl mb-6 w-full">
-        {TABS.map(t => (
+        {TABS.map(tabItem => (
           <button
-            key={t.key}
-            onClick={() => switchTab(t.key)}
+            key={tabItem.key}
+            onClick={() => switchTab(tabItem.key)}
             className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-              tab === t.key ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+              tab === tabItem.key ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
             }`}
           >
-            {t.label}
-            {statusCounts[t.key] > 0 && (
+            {tabItem.label}
+            {statusCounts[tabItem.key] > 0 && (
               <span className={`text-xs px-1.5 py-0.5 rounded-full font-semibold ${
-                tab === t.key
-                  ? t.key === 'active' ? 'bg-primary-100 text-primary-700'
-                  : t.key === 'cancelled' ? 'bg-red-100 text-red-600'
+                tab === tabItem.key
+                  ? tabItem.key === 'active' ? 'bg-primary-100 text-primary-700'
+                  : tabItem.key === 'cancelled' ? 'bg-red-100 text-red-600'
                   : 'bg-gray-100 text-gray-600'
                   : 'bg-gray-200 text-gray-500'
               }`}>
-                {statusCounts[t.key]}
+                {statusCounts[tabItem.key]}
               </span>
             )}
           </button>
@@ -226,14 +307,23 @@ export default function Orders() {
           <div className="text-6xl mb-4">
             {tab === 'active' ? '🕐' : tab === 'completed' ? '🎉' : '📭'}
           </div>
-          <h2 className="text-lg font-semibold text-gray-700">
-            {tab === 'active' ? 'No active orders' : tab === 'completed' ? 'No completed orders yet' : 'No cancelled orders'}
-          </h2>
-          <p className="text-gray-400 text-sm mt-1">
-            {tab === 'active' ? 'Your active orders will appear here' : tab === 'completed' ? 'Orders you\'ve picked up will show here' : 'Cancelled orders will show here'}
-          </p>
-          {tab === 'active' && (
-            <Link to="/browse" className="btn-primary mt-5 inline-block">Browse food bags</Link>
+          {(search || dateFrom || dateTo) ? (
+            <>
+              <h2 className="text-lg font-semibold text-gray-700">No orders match your search</h2>
+              <button onClick={handleClearFilters} className="btn-secondary mt-4 text-sm">Clear filters</button>
+            </>
+          ) : (
+            <>
+              <h2 className="text-lg font-semibold text-gray-700">
+                {tab === 'active' ? 'No active orders' : tab === 'completed' ? 'No completed orders yet' : 'No cancelled orders'}
+              </h2>
+              <p className="text-gray-400 text-sm mt-1">
+                {tab === 'active' ? 'Your active orders will appear here' : tab === 'completed' ? "Orders you've picked up will show here" : 'Cancelled orders will show here'}
+              </p>
+              {tab === 'active' && (
+                <Link to="/browse" className="btn-primary mt-5 inline-block">Browse food bags</Link>
+              )}
+            </>
           )}
         </div>
       ) : (

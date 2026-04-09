@@ -234,11 +234,25 @@ export default function ShopDashboard() {
       </div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
         <StatCard title="Your earnings" value={`${formatPrice(stats?.total_payout ?? stats?.total_revenue ?? 0)} UZS`} sub={stats?.commission_total ? `−${formatPrice(stats.commission_total)} UZS platform commission` : 'from completed orders'} icon="💰" color="text-primary-600" />
         <StatCard title="Total orders" value={stats?.total_orders || 0} sub="all time" icon="📦" />
         <StatCard title="Items listed" value={stats?.items_listed || 0} sub="active listings" icon="🍽️" />
         <StatCard title="Avg. rating" value={stats?.avg_rating ? `${stats.avg_rating} ⭐` : '—'} sub="customer reviews" icon="⭐" color="text-yellow-600" />
+        <StatCard
+          title="Completion rate"
+          value={stats?.conversion_rate != null ? `${stats.conversion_rate}%` : '—'}
+          sub="orders picked up"
+          icon="✅"
+          color={stats?.conversion_rate >= 70 ? 'text-primary-600' : 'text-gray-700'}
+        />
+        <StatCard
+          title="Cancellation rate"
+          value={stats?.cancellation_rate != null ? `${stats.cancellation_rate}%` : '—'}
+          sub="orders cancelled"
+          icon="❌"
+          color={stats?.cancellation_rate > 20 ? 'text-red-600' : 'text-gray-700'}
+        />
       </div>
 
       {/* Charts row 1: Revenue + Status breakdown */}

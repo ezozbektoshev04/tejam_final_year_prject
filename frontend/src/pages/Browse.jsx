@@ -365,8 +365,8 @@ export default function Browse() {
         foodItems.length === 0 ? (
           <EmptyState
             icon="⏰"
-            title={availableNow ? 'No pickups available right now' : 'No food items found'}
-            description={availableNow ? 'Check back later or turn off the filter' : 'Try adjusting your search or category filter'}
+            title="No food items found"
+            description="Try adjusting your search or category filter"
           />
         ) : (
           <>
