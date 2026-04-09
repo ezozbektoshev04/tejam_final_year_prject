@@ -90,6 +90,7 @@ def _migrate_db():
             "ALTER TABLE orders ADD COLUMN commission_rate REAL DEFAULT 0.10",
             "ALTER TABLE orders ADD COLUMN commission_amount REAL DEFAULT 0.0",
             "ALTER TABLE orders ADD COLUMN shop_payout REAL DEFAULT 0.0",
+            "CREATE TABLE IF NOT EXISTS shop_payouts (id INTEGER PRIMARY KEY AUTOINCREMENT, shop_id INTEGER REFERENCES shops(id), amount REAL NOT NULL, note TEXT, status VARCHAR(10) DEFAULT 'settled', settled_at DATETIME, created_at DATETIME)",
         ]:
             try:
                 conn.execute(text(stmt))

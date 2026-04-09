@@ -251,6 +251,30 @@ class VerificationCode(db.Model):
         return vc
 
 
+class ShopPayout(db.Model):
+    """Records each manual settlement payment from a shop to the platform."""
+    __tablename__ = "shop_payouts"
+
+    id         = db.Column(db.Integer, primary_key=True)
+    shop_id    = db.Column(db.Integer, db.ForeignKey("shops.id"), nullable=False)
+    amount     = db.Column(db.Float, nullable=False)
+    note       = db.Column(db.String(255))
+    status     = db.Column(db.String(10), default="settled")
+    settled_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            "id":         self.id,
+            "shop_id":    self.shop_id,
+            "amount":     self.amount,
+            "note":       self.note,
+            "status":     self.status,
+            "settled_at": self.settled_at.isoformat() if self.settled_at else None,
+            "created_at": self.created_at.isoformat(),
+        }
+
+
 class Review(db.Model):
     __tablename__ = "reviews"
 

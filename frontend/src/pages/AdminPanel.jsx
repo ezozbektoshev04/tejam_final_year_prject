@@ -1,5 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
+} from 'recharts'
 import api from '../api/axios'
 import { useAuth } from '../context/AuthContext'
 
@@ -54,12 +57,46 @@ export default function AdminPanel() {
   const [newCategory, setNewCategory] = useState('')
 
   // Earnings state
-  const [earnings, setEarnings] = useState(null)
+  const [earnings, setEarnings]               = useState(null)
   const [earningsLoading, setEarningsLoading] = useState(false)
+  const [earningsPeriod, setEarningsPeriod]   = useState('this_month')
+  const [earningsStart, setEarningsStart]     = useState('')
+  const [earningsEnd, setEarningsEnd]         = useState('')
+  const [earningsSearch, setEarningsSearch]   = useState('')
+  const [earningsSearchInput, setEarningsSearchInput] = useState('')
+  const [earningsPage, setEarningsPage]       = useState(1)
+  const [settleModal, setSettleModal]         = useState(null)
+  const [settleAmount, setSettleAmount]       = useState('')
+  const [settleNote, setSettleNote]           = useState('')
+  const [settling, setSettling]               = useState(false)
+  const [exportingEarnings, setExportingEarnings] = useState(false)
+  const EARNINGS_PER_PAGE = 10
+
+  const getEarningsDates = (period = earningsPeriod) => {
+    const today = new Date()
+    const fmt   = d => d.toISOString().slice(0, 10)
+    if (period === 'this_month') {
+      return { start: fmt(new Date(today.getFullYear(), today.getMonth(), 1)), end: fmt(today) }
+    }
+    if (period === 'last_month') {
+      return {
+        start: fmt(new Date(today.getFullYear(), today.getMonth() - 1, 1)),
+        end:   fmt(new Date(today.getFullYear(), today.getMonth(), 0)),
+      }
+    }
+    if (period === '3_months') {
+      const s = new Date(today.getFullYear(), today.getMonth() - 2, 1)
+      return { start: fmt(s), end: fmt(today) }
+    }
+    if (period === 'custom') return { start: earningsStart, end: earningsEnd }
+    return { start: '', end: '' } // all_time
+  }
 
   useEffect(() => { fetchAll() }, [])
   useEffect(() => { if (tab === 'Settings' && !settings) fetchSettings() }, [tab])
-  useEffect(() => { if (tab === 'Earnings' && !earnings) fetchEarnings() }, [tab])
+  useEffect(() => {
+    if (tab === 'Earnings') fetchEarnings(earningsPage, earningsSearch, earningsPeriod)
+  }, [tab, earningsPeriod, earningsSearch, earningsPage])
 
   const fetchAll = async () => {
     setLoading(true)
@@ -90,16 +127,67 @@ export default function AdminPanel() {
     }
   }
 
-  const fetchEarnings = async () => {
+  const fetchEarnings = async (page = earningsPage, search = earningsSearch, period = earningsPeriod) => {
     setEarningsLoading(true)
     try {
-      const res = await api.get('/admin/earnings')
+      const params = new URLSearchParams()
+      params.set('page', page)
+      params.set('per_page', EARNINGS_PER_PAGE)
+      if (search) params.set('search', search)
+      const { start, end } = getEarningsDates(period)
+      if (start) params.set('start', start)
+      if (end)   params.set('end',   end)
+      const res = await api.get(`/admin/earnings?${params}`)
       setEarnings(res.data)
     } catch (err) {
       console.error(err)
     } finally {
       setEarningsLoading(false)
     }
+  }
+
+  const handleSettleSubmit = async () => {
+    if (!settleModal || !settleAmount) return
+    setSettling(true)
+    try {
+      await api.post('/admin/earnings/settle', {
+        shop_id: settleModal.shop_id,
+        amount:  parseFloat(settleAmount),
+        note:    settleNote,
+      })
+      setSettleModal(null)
+      setSettleAmount('')
+      setSettleNote('')
+      fetchEarnings()
+    } catch (err) {
+      alert(err.response?.data?.error || 'Failed to record settlement')
+    } finally {
+      setSettling(false)
+    }
+  }
+
+  const handleExportEarnings = async () => {
+    setExportingEarnings(true)
+    try {
+      const { start, end } = getEarningsDates()
+      const params = new URLSearchParams()
+      if (start) params.set('start', start)
+      if (end)   params.set('end',   end)
+      const token = localStorage.getItem('access_token')
+      const res = await fetch(
+        `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/admin/earnings/export?${params}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      )
+      if (!res.ok) { const e = await res.json(); alert(e.error || 'Export failed'); return }
+      const blob = await res.blob()
+      const url  = URL.createObjectURL(blob)
+      const a    = document.createElement('a')
+      a.href = url
+      a.download = `tejam-earnings-${start || 'all'}.xlsx`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch { alert('Export failed') }
+    finally { setExportingEarnings(false) }
   }
 
   const saveSettings = async (patch) => {
@@ -446,6 +534,41 @@ export default function AdminPanel() {
       {/* ── Earnings ── */}
       {tab === 'Earnings' && (
         <div>
+          {/* Period selector */}
+          <div className="flex flex-wrap items-center gap-2 mb-6">
+            {[
+              { label: 'This month',    value: 'this_month' },
+              { label: 'Last month',    value: 'last_month' },
+              { label: 'Last 3 months', value: '3_months'   },
+              { label: 'All time',      value: 'all_time'   },
+              { label: 'Custom',        value: 'custom'     },
+            ].map(p => (
+              <button
+                key={p.value}
+                onClick={() => { setEarningsPeriod(p.value); setEarningsPage(1) }}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
+                  earningsPeriod === p.value
+                    ? 'bg-gray-900 text-white border-gray-900'
+                    : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'
+                }`}
+              >{p.label}</button>
+            ))}
+            {earningsPeriod === 'custom' && (
+              <>
+                <input type="date" className="input-field text-sm py-1.5 w-auto"
+                  value={earningsStart} onChange={e => setEarningsStart(e.target.value)} />
+                <span className="text-gray-400 text-sm">→</span>
+                <input type="date" className="input-field text-sm py-1.5 w-auto"
+                  value={earningsEnd} onChange={e => setEarningsEnd(e.target.value)} />
+                <button
+                  onClick={() => { setEarningsPage(1); fetchEarnings(1, earningsSearch, 'custom') }}
+                  disabled={!earningsStart || !earningsEnd}
+                  className="btn-primary text-sm py-1.5 px-3 disabled:opacity-50"
+                >Apply</button>
+              </>
+            )}
+          </div>
+
           {earningsLoading || !earnings ? (
             <div className="card p-10 text-center text-gray-400">
               <div className="animate-spin w-6 h-6 border-2 border-primary-600 border-t-transparent rounded-full mx-auto mb-3" />
@@ -453,60 +576,222 @@ export default function AdminPanel() {
             </div>
           ) : (
             <>
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-                <StatCard title="Total commission earned" value={formatPrice(earnings.total_commission)} sub={`from ${earnings.completed_orders} completed orders`} icon="💵" />
-                <StatCard title="This month" value={formatPrice(earnings.this_month_commission)} sub="commission revenue" icon="📅" />
-                <StatCard title="Last month" value={formatPrice(earnings.last_month_commission)} sub="commission revenue" icon="🗓️" />
-                <StatCard title="Total shop payouts" value={formatPrice(earnings.total_payout)} sub="paid out to shops" icon="🏦" />
+              {/* Stat cards */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                <StatCard title="Commission (period)" value={formatPrice(earnings.total_commission)} sub={`${earnings.completed_orders} completed orders`} icon="💵" />
+                <StatCard title="This month" value={formatPrice(earnings.this_month_commission)} sub="commission (all-time calc)" icon="📅" />
+                <StatCard title="Last month" value={formatPrice(earnings.last_month_commission)} sub="commission" icon="🗓️" />
+                <StatCard title="Gross revenue (period)" value={formatPrice(earnings.total_revenue)} sub={`shops earn ${formatPrice(earnings.total_payout)}`} icon="📊" />
               </div>
 
-              <div className="card overflow-hidden">
-                <div className="px-5 py-4 border-b border-gray-100">
-                  <h3 className="font-semibold text-gray-900">Per-shop breakdown</h3>
-                  <p className="text-xs text-gray-400 mt-0.5">Based on all picked-up (completed) orders</p>
+              {/* Monthly trend chart */}
+              {earnings.monthly_trend?.length > 0 && (
+                <div className="card p-5 mb-6">
+                  <h3 className="font-semibold text-gray-900 mb-1">Monthly commission trend</h3>
+                  <p className="text-xs text-gray-400 mb-4">Green = your commission · Light = gross revenue (×1,000 UZS)</p>
+                  <ResponsiveContainer width="100%" height={200}>
+                    <BarChart data={earnings.monthly_trend} barGap={2}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                      <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+                      <YAxis tick={{ fontSize: 11 }} tickFormatter={v => `${Math.round(v / 1000)}K`} />
+                      <Tooltip formatter={(v, name) => [formatPrice(v), name === 'commission' ? 'Commission' : 'Gross revenue']} />
+                      <Legend formatter={n => n === 'commission' ? 'Commission' : 'Gross revenue'} />
+                      <Bar dataKey="revenue"    fill="#d1fae5" name="revenue"    radius={[2,2,0,0]} />
+                      <Bar dataKey="commission" fill="#1a7548" name="commission" radius={[2,2,0,0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
                 </div>
+              )}
+
+              {/* Per-shop table */}
+              <div className="card overflow-hidden">
+                <div className="px-5 py-4 border-b border-gray-100 flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h3 className="font-semibold text-gray-900">Per-shop breakdown</h3>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      Commission rate: {Math.round((earnings.commission_rate || 0.10) * 100)}% · Pending = all-time owed minus settled
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <form
+                      onSubmit={e => { e.preventDefault(); setEarningsSearch(earningsSearchInput); setEarningsPage(1) }}
+                      className="flex gap-2"
+                    >
+                      <input
+                        type="text"
+                        className="input-field text-sm py-1.5"
+                        placeholder="Search shop, city…"
+                        value={earningsSearchInput}
+                        onChange={e => setEarningsSearchInput(e.target.value)}
+                      />
+                      <button type="submit" className="btn-secondary text-sm px-3">Search</button>
+                      {earningsSearch && (
+                        <button type="button" className="btn-secondary text-sm px-3"
+                          onClick={() => { setEarningsSearch(''); setEarningsSearchInput(''); setEarningsPage(1) }}>
+                          Clear
+                        </button>
+                      )}
+                    </form>
+                    <button
+                      onClick={handleExportEarnings}
+                      disabled={exportingEarnings}
+                      className="btn-secondary text-sm disabled:opacity-50"
+                    >
+                      {exportingEarnings ? 'Exporting…' : '⬇ Export Excel'}
+                    </button>
+                  </div>
+                </div>
+
                 {earnings.per_shop.length === 0 ? (
                   <div className="p-10 text-center text-gray-400">
                     <p className="text-4xl mb-2">📊</p>
-                    <p>No completed orders yet</p>
+                    <p>{earningsSearch ? 'No shops match your search' : 'No completed orders yet'}</p>
                   </div>
                 ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="bg-gray-50 text-left border-b border-gray-100">
-                          <th className="px-4 py-3 font-medium text-gray-500">Shop</th>
-                          <th className="px-4 py-3 font-medium text-gray-500 text-right">Orders</th>
-                          <th className="px-4 py-3 font-medium text-gray-500 text-right">Total revenue</th>
-                          <th className="px-4 py-3 font-medium text-gray-500 text-right">Commission (10%)</th>
-                          <th className="px-4 py-3 font-medium text-gray-500 text-right">Shop payout</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-100">
-                        {earnings.per_shop.map(s => (
-                          <tr key={s.shop_id} className="hover:bg-gray-50">
-                            <td className="px-4 py-3 font-medium text-gray-900">{s.shop_name}</td>
-                            <td className="px-4 py-3 text-gray-600 text-right">{s.orders}</td>
-                            <td className="px-4 py-3 text-gray-700 text-right">{formatPrice(s.revenue)}</td>
-                            <td className="px-4 py-3 text-primary-700 font-semibold text-right">{formatPrice(s.commission)}</td>
-                            <td className="px-4 py-3 text-gray-600 text-right">{formatPrice(s.payout)}</td>
+                  <>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="bg-gray-50 text-left border-b border-gray-100">
+                            <th className="px-4 py-3 font-medium text-gray-500">Shop</th>
+                            <th className="px-4 py-3 font-medium text-gray-500">City</th>
+                            <th className="px-4 py-3 font-medium text-gray-500 text-right">Orders</th>
+                            <th className="px-4 py-3 font-medium text-gray-500 text-right">Gross revenue</th>
+                            <th className="px-4 py-3 font-medium text-gray-500 text-right">
+                              Commission ({Math.round((earnings.commission_rate || 0.10) * 100)}%)
+                            </th>
+                            <th className="px-4 py-3 font-medium text-gray-500 text-right">Shop payout</th>
+                            <th className="px-4 py-3 font-medium text-gray-500 text-right">Settled (all-time)</th>
+                            <th className="px-4 py-3 font-medium text-gray-500">Status</th>
+                            <th className="px-4 py-3 font-medium text-gray-500"></th>
                           </tr>
-                        ))}
-                      </tbody>
-                      <tfoot className="bg-gray-50 border-t border-gray-200">
-                        <tr>
-                          <td className="px-4 py-3 font-semibold text-gray-700">Total</td>
-                          <td className="px-4 py-3 font-semibold text-gray-700 text-right">{earnings.completed_orders}</td>
-                          <td className="px-4 py-3 font-semibold text-gray-700 text-right">{formatPrice(earnings.total_revenue)}</td>
-                          <td className="px-4 py-3 font-bold text-primary-700 text-right">{formatPrice(earnings.total_commission)}</td>
-                          <td className="px-4 py-3 font-semibold text-gray-700 text-right">{formatPrice(earnings.total_payout)}</td>
-                        </tr>
-                      </tfoot>
-                    </table>
-                  </div>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                          {earnings.per_shop.map(s => (
+                            <tr key={s.shop_id} className="hover:bg-gray-50">
+                              <td className="px-4 py-3 font-medium text-gray-900">{s.shop_name}</td>
+                              <td className="px-4 py-3 text-gray-500">{s.city || '—'}</td>
+                              <td className="px-4 py-3 text-gray-600 text-right">{s.orders}</td>
+                              <td className="px-4 py-3 text-gray-700 text-right">{formatPrice(s.revenue)}</td>
+                              <td className="px-4 py-3 text-primary-700 font-semibold text-right">{formatPrice(s.commission)}</td>
+                              <td className="px-4 py-3 text-gray-600 text-right">{formatPrice(s.payout)}</td>
+                              <td className="px-4 py-3 text-gray-600 text-right">{formatPrice(s.total_settled)}</td>
+                              <td className="px-4 py-3">
+                                {s.pending_payout > 0 ? (
+                                  <span className="badge bg-amber-100 text-amber-700 font-medium">
+                                    {formatPrice(s.pending_payout)} owed
+                                  </span>
+                                ) : (
+                                  <span className="badge bg-primary-100 text-primary-700">✓ Settled</span>
+                                )}
+                              </td>
+                              <td className="px-4 py-3">
+                                {s.pending_payout > 0 && (
+                                  <button
+                                    onClick={() => { setSettleModal(s); setSettleAmount(String(s.pending_payout)); setSettleNote('') }}
+                                    className="text-xs text-primary-700 border border-primary-200 bg-primary-50 hover:bg-primary-100 px-2 py-1 rounded-md transition-colors font-medium"
+                                  >
+                                    Mark settled
+                                  </button>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        {earnings.per_shop.length > 0 && (
+                          <tfoot className="bg-gray-50 border-t border-gray-200">
+                            <tr>
+                              <td className="px-4 py-3 font-semibold text-gray-700" colSpan={2}>
+                                {earningsSearch
+                                  ? `${earnings.total_shops} result${earnings.total_shops !== 1 ? 's' : ''}`
+                                  : 'Period total'}
+                              </td>
+                              <td className="px-4 py-3 font-semibold text-gray-700 text-right">{earnings.completed_orders}</td>
+                              <td className="px-4 py-3 font-semibold text-gray-700 text-right">{formatPrice(earnings.total_revenue)}</td>
+                              <td className="px-4 py-3 font-bold text-primary-700 text-right">{formatPrice(earnings.total_commission)}</td>
+                              <td className="px-4 py-3 font-semibold text-gray-700 text-right">{formatPrice(earnings.total_payout)}</td>
+                              <td colSpan={3} />
+                            </tr>
+                          </tfoot>
+                        )}
+                      </table>
+                    </div>
+
+                    {/* Pagination */}
+                    {earnings.pages > 1 && (
+                      <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100">
+                        <p className="text-sm text-gray-500">
+                          Page {earnings.page} of {earnings.pages} · {earnings.total_shops} shops
+                        </p>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => setEarningsPage(p => p - 1)}
+                            disabled={earnings.page === 1}
+                            className="btn-secondary text-sm px-3 py-1.5 disabled:opacity-40"
+                          >← Prev</button>
+                          <button
+                            onClick={() => setEarningsPage(p => p + 1)}
+                            disabled={earnings.page >= earnings.pages}
+                            className="btn-secondary text-sm px-3 py-1.5 disabled:opacity-40"
+                          >Next →</button>
+                        </div>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             </>
+          )}
+
+          {/* Settle modal */}
+          {settleModal && (
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+              <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl">
+                <div className="flex items-center justify-between mb-5">
+                  <h2 className="text-lg font-bold text-gray-900">Record settlement</h2>
+                  <button onClick={() => setSettleModal(null)} className="text-gray-400 hover:text-gray-600">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+                <p className="text-sm text-gray-600 mb-4">
+                  Marking <span className="font-semibold">{settleModal.shop_name}</span> as paid.
+                  Pending: <span className="font-semibold text-amber-600">{formatPrice(settleModal.pending_payout)}</span>
+                </p>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Amount settled (UZS)</label>
+                    <input
+                      type="number"
+                      className="input-field"
+                      value={settleAmount}
+                      onChange={e => setSettleAmount(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Note (optional)</label>
+                    <input
+                      type="text"
+                      className="input-field"
+                      placeholder="e.g. Bank transfer April 2025"
+                      value={settleNote}
+                      onChange={e => setSettleNote(e.target.value)}
+                    />
+                  </div>
+                  <div className="flex gap-3 pt-2">
+                    <button onClick={() => setSettleModal(null)} className="btn-secondary flex-1">Cancel</button>
+                    <button
+                      onClick={handleSettleSubmit}
+                      disabled={settling || !settleAmount}
+                      className="btn-primary flex-1 disabled:opacity-50"
+                    >
+                      {settling ? 'Saving…' : 'Confirm settlement'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
           )}
         </div>
       )}

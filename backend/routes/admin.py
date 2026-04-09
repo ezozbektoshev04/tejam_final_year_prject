@@ -2,7 +2,7 @@ import json
 from datetime import datetime, timedelta
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from models import db, User, Shop, Order, FoodItem, PlatformSetting, Notification
+from models import db, User, Shop, Order, FoodItem, PlatformSetting, Notification, ShopPayout
 from utils.email import send_shop_approved_email, send_account_deleted_email, send_shop_status_email
 
 admin_bp = Blueprint("admin", __name__)
@@ -232,42 +232,104 @@ def earnings():
     if not require_admin():
         return jsonify({"error": "Admin access required"}), 403
 
-    completed = Order.query.filter_by(status="picked_up").all()
+    from collections import defaultdict
+
+    # ── Filters ──
+    start_str = request.args.get("start")
+    end_str   = request.args.get("end")
+    search    = request.args.get("search", "").strip().lower()
+    page      = request.args.get("page", 1, type=int)
+    per_page  = request.args.get("per_page", 10, type=int)
+
+    query = Order.query.filter_by(status="picked_up")
+    if start_str:
+        try:
+            query = query.filter(Order.created_at >= datetime.strptime(start_str, "%Y-%m-%d"))
+        except ValueError:
+            pass
+    if end_str:
+        try:
+            end_dt = datetime.strptime(end_str, "%Y-%m-%d").replace(hour=23, minute=59, second=59)
+            query = query.filter(Order.created_at <= end_dt)
+        except ValueError:
+            pass
+
+    completed = query.all()
 
     total_commission = sum(o.commission_amount or 0 for o in completed)
     total_revenue    = sum(o.total_price for o in completed)
     total_payout     = sum(o.shop_payout or 0 for o in completed)
 
+    # ── This month / last month (always all-time, not affected by filter) ──
     now = datetime.utcnow()
-    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    month_start      = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     last_month_start = (month_start - timedelta(days=1)).replace(day=1)
+    all_completed    = Order.query.filter_by(status="picked_up").all()
+    this_month_commission = sum(o.commission_amount or 0 for o in all_completed if o.created_at >= month_start)
+    last_month_commission = sum(o.commission_amount or 0 for o in all_completed if last_month_start <= o.created_at < month_start)
 
-    this_month_commission = sum(
-        o.commission_amount or 0 for o in completed if o.created_at >= month_start
-    )
-    last_month_commission = sum(
-        o.commission_amount or 0 for o in completed
-        if last_month_start <= o.created_at < month_start
-    )
+    # ── Monthly trend (based on filtered data) ──
+    monthly_map = defaultdict(lambda: {"revenue": 0.0, "commission": 0.0, "orders": 0})
+    for o in completed:
+        key = o.created_at.strftime("%Y-%m")
+        monthly_map[key]["revenue"]    += o.total_price
+        monthly_map[key]["commission"] += o.commission_amount or 0
+        monthly_map[key]["orders"]     += 1
 
-    from collections import defaultdict
-    shop_stats = defaultdict(lambda: {"orders": 0, "revenue": 0.0, "commission": 0.0, "payout": 0.0})
+    monthly_trend = [
+        {"month": k, "revenue": round(v["revenue"]), "commission": round(v["commission"]), "orders": v["orders"]}
+        for k, v in sorted(monthly_map.items())
+    ]
+
+    # ── Per-shop breakdown ──
+    shop_stats = defaultdict(lambda: {
+        "orders": 0, "revenue": 0.0, "commission": 0.0, "payout": 0.0,
+        "shop_name": "", "city": "", "category": ""
+    })
     for o in completed:
         item = o.food_item
         if item and item.shop:
-            key = item.shop.id
-            shop_stats[key]["shop_id"]   = key
-            shop_stats[key]["shop_name"] = item.shop.name
-            shop_stats[key]["orders"]    += 1
-            shop_stats[key]["revenue"]   += o.total_price
-            shop_stats[key]["commission"] += o.commission_amount or 0
-            shop_stats[key]["payout"]    += o.shop_payout or 0
+            sid = item.shop.id
+            shop_stats[sid]["shop_id"]    = sid
+            shop_stats[sid]["shop_name"]  = item.shop.name
+            shop_stats[sid]["city"]       = item.shop.city or ""
+            shop_stats[sid]["category"]   = item.shop.category or ""
+            shop_stats[sid]["orders"]     += 1
+            shop_stats[sid]["revenue"]    += o.total_price
+            shop_stats[sid]["commission"] += o.commission_amount or 0
+            shop_stats[sid]["payout"]     += o.shop_payout or 0
 
-    per_shop = sorted(shop_stats.values(), key=lambda x: x["commission"], reverse=True)
-    for s in per_shop:
+    per_shop_list = sorted(shop_stats.values(), key=lambda x: x["commission"], reverse=True)
+
+    # Attach settlement info (all-time, not period-filtered)
+    for s in per_shop_list:
         s["revenue"]    = round(s["revenue"])
         s["commission"] = round(s["commission"])
         s["payout"]     = round(s["payout"])
+        settled = db.session.query(db.func.sum(ShopPayout.amount)).filter_by(
+            shop_id=s["shop_id"]
+        ).scalar() or 0
+        all_commission = db.session.query(db.func.sum(Order.commission_amount)).join(FoodItem).filter(
+            FoodItem.shop_id == s["shop_id"],
+            Order.status == "picked_up"
+        ).scalar() or 0
+        s["total_settled"]  = round(settled)
+        s["pending_payout"] = round(max(0.0, all_commission - settled))
+
+    # ── Search ──
+    if search:
+        per_shop_list = [
+            s for s in per_shop_list
+            if search in s["shop_name"].lower()
+            or search in s["city"].lower()
+            or search in s["category"].lower()
+        ]
+
+    # ── Pagination ──
+    total_shops    = len(per_shop_list)
+    per_shop_page  = per_shop_list[(page - 1) * per_page : page * per_page]
+
+    commission_rate = PlatformSetting.get("commission_rate", 0.10)
 
     return jsonify({
         "total_commission":      round(total_commission),
@@ -276,8 +338,205 @@ def earnings():
         "this_month_commission": round(this_month_commission),
         "last_month_commission": round(last_month_commission),
         "completed_orders":      len(completed),
-        "per_shop":              per_shop,
+        "commission_rate":       round(float(commission_rate), 4),
+        "monthly_trend":         monthly_trend,
+        "per_shop":              per_shop_page,
+        "total_shops":           total_shops,
+        "page":                  page,
+        "per_page":              per_page,
+        "pages":                 max(1, -(-total_shops // per_page)),
     })
+
+
+@admin_bp.route("/earnings/settle", methods=["POST"])
+@jwt_required()
+def settle_shop():
+    if not require_admin():
+        return jsonify({"error": "Admin access required"}), 403
+
+    data    = request.get_json()
+    shop_id = data.get("shop_id")
+    amount  = data.get("amount")
+    note    = data.get("note", "")
+
+    if not shop_id or amount is None:
+        return jsonify({"error": "shop_id and amount are required"}), 400
+
+    payout = ShopPayout(
+        shop_id    = shop_id,
+        amount     = round(float(amount), 2),
+        note       = note or None,
+        status     = "settled",
+        settled_at = datetime.utcnow(),
+    )
+    db.session.add(payout)
+    db.session.commit()
+    return jsonify(payout.to_dict())
+
+
+@admin_bp.route("/earnings/export", methods=["GET"])
+@jwt_required()
+def export_earnings():
+    if not require_admin():
+        return jsonify({"error": "Admin access required"}), 403
+
+    try:
+        import openpyxl
+        from openpyxl.styles import Font, PatternFill, Alignment
+        from openpyxl.utils import get_column_letter
+    except ImportError:
+        return jsonify({"error": "openpyxl is not installed"}), 500
+
+    import io
+    from collections import defaultdict
+
+    start_str = request.args.get("start")
+    end_str   = request.args.get("end")
+
+    query = Order.query.filter_by(status="picked_up")
+    if start_str:
+        try:
+            query = query.filter(Order.created_at >= datetime.strptime(start_str, "%Y-%m-%d"))
+        except ValueError:
+            pass
+    if end_str:
+        try:
+            end_dt = datetime.strptime(end_str, "%Y-%m-%d").replace(hour=23, minute=59, second=59)
+            query = query.filter(Order.created_at <= end_dt)
+        except ValueError:
+            pass
+
+    completed = query.all()
+
+    total_commission = sum(o.commission_amount or 0 for o in completed)
+    total_revenue    = sum(o.total_price for o in completed)
+    total_payout     = sum(o.shop_payout or 0 for o in completed)
+    commission_rate  = PlatformSetting.get("commission_rate", 0.10)
+
+    period_label = f"{start_str or 'All time'} → {end_str or 'now'}"
+
+    # Monthly trend
+    monthly_map = defaultdict(lambda: {"revenue": 0.0, "commission": 0.0, "orders": 0})
+    for o in completed:
+        key = o.created_at.strftime("%Y-%m")
+        monthly_map[key]["revenue"]    += o.total_price
+        monthly_map[key]["commission"] += o.commission_amount or 0
+        monthly_map[key]["orders"]     += 1
+
+    # Per-shop
+    shop_stats = defaultdict(lambda: {
+        "orders": 0, "revenue": 0.0, "commission": 0.0, "payout": 0.0,
+        "shop_name": "", "city": "", "category": ""
+    })
+    for o in completed:
+        item = o.food_item
+        if item and item.shop:
+            sid = item.shop.id
+            shop_stats[sid]["shop_id"]    = sid
+            shop_stats[sid]["shop_name"]  = item.shop.name
+            shop_stats[sid]["city"]       = item.shop.city or ""
+            shop_stats[sid]["category"]   = item.shop.category or ""
+            shop_stats[sid]["orders"]     += 1
+            shop_stats[sid]["revenue"]    += o.total_price
+            shop_stats[sid]["commission"] += o.commission_amount or 0
+            shop_stats[sid]["payout"]     += o.shop_payout or 0
+
+    per_shop_list = sorted(shop_stats.values(), key=lambda x: x["commission"], reverse=True)
+    for s in per_shop_list:
+        settled = db.session.query(db.func.sum(ShopPayout.amount)).filter_by(shop_id=s["shop_id"]).scalar() or 0
+        all_comm = db.session.query(db.func.sum(Order.commission_amount)).join(FoodItem).filter(
+            FoodItem.shop_id == s["shop_id"], Order.status == "picked_up"
+        ).scalar() or 0
+        s["total_settled"]  = round(settled)
+        s["pending_payout"] = round(max(0.0, all_comm - settled))
+
+    # ── Build workbook ──
+    HEADER_FILL = PatternFill("solid", fgColor="1a7548")
+    HEADER_FONT = Font(bold=True, color="FFFFFF", size=11)
+    CENTER      = Alignment(horizontal="center")
+
+    def style_header(ws, row, ncols):
+        for col in range(1, ncols + 1):
+            c = ws.cell(row=row, column=col)
+            c.fill = HEADER_FILL; c.font = HEADER_FONT; c.alignment = CENTER
+
+    def auto_width(ws):
+        for col in ws.columns:
+            w = max((len(str(c.value)) if c.value else 0) for c in col)
+            ws.column_dimensions[get_column_letter(col[0].column)].width = min(w + 4, 40)
+
+    wb = openpyxl.Workbook()
+
+    # Sheet 1 — Summary
+    ws1 = wb.active
+    ws1.title = "Summary"
+    rows = [
+        ("Tejam · Earnings Report", ""),
+        ("", ""),
+        ("Period", period_label),
+        ("Commission rate", f"{round(float(commission_rate) * 100, 1)}%"),
+        ("", ""),
+        ("Completed orders", len(completed)),
+        ("Total gross revenue (UZS)", round(total_revenue)),
+        ("Platform commission earned (UZS)", round(total_commission)),
+        ("Total shop payouts (UZS)", round(total_payout)),
+    ]
+    for i, (label, value) in enumerate(rows, start=1):
+        ws1.cell(row=i, column=1, value=label)
+        ws1.cell(row=i, column=2, value=value)
+        if i == 1:
+            ws1.cell(row=i, column=1).font = Font(bold=True, size=14, color="1a7548")
+        elif label:
+            ws1.cell(row=i, column=1).font = Font(bold=True, size=10)
+        if label in ("Platform commission earned (UZS)",):
+            ws1.cell(row=i, column=2).font = Font(bold=True, color="1a7548")
+    ws1.column_dimensions["A"].width = 32
+    ws1.column_dimensions["B"].width = 30
+
+    # Sheet 2 — Monthly Trend
+    ws2 = wb.create_sheet("Monthly Trend")
+    headers2 = ["Month", "Orders", "Gross Revenue (UZS)", "Commission (UZS)", "Shop Payout (UZS)"]
+    for col, h in enumerate(headers2, start=1):
+        ws2.cell(row=1, column=col, value=h)
+    style_header(ws2, 1, len(headers2))
+    for i, (month, v) in enumerate(sorted(monthly_map.items()), start=2):
+        ws2.cell(row=i, column=1, value=month)
+        ws2.cell(row=i, column=2, value=v["orders"])
+        ws2.cell(row=i, column=3, value=round(v["revenue"]))
+        ws2.cell(row=i, column=4, value=round(v["commission"]))
+        ws2.cell(row=i, column=5, value=round(v["revenue"] - v["commission"]))
+    auto_width(ws2)
+
+    # Sheet 3 — Per Shop
+    ws3 = wb.create_sheet("Per Shop")
+    headers3 = ["Shop", "City", "Category", "Orders", "Gross Revenue (UZS)",
+                 "Commission (UZS)", "Shop Payout (UZS)", "Total Settled (UZS)", "Pending (UZS)"]
+    for col, h in enumerate(headers3, start=1):
+        ws3.cell(row=1, column=col, value=h)
+    style_header(ws3, 1, len(headers3))
+    for i, s in enumerate(per_shop_list, start=2):
+        ws3.cell(row=i, column=1, value=s["shop_name"])
+        ws3.cell(row=i, column=2, value=s["city"])
+        ws3.cell(row=i, column=3, value=s["category"])
+        ws3.cell(row=i, column=4, value=s["orders"])
+        ws3.cell(row=i, column=5, value=round(s["revenue"]))
+        ws3.cell(row=i, column=6, value=round(s["commission"]))
+        ws3.cell(row=i, column=7, value=round(s["payout"]))
+        ws3.cell(row=i, column=8, value=s["total_settled"])
+        ws3.cell(row=i, column=9, value=s["pending_payout"])
+    auto_width(ws3)
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+
+    from flask import send_file
+    filename = f"tejam-earnings-{(start_str or 'all').replace('-', '')}-{(end_str or 'now').replace('-', '')}.xlsx"
+    return send_file(buf,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        as_attachment=True,
+        download_name=filename,
+    )
 
 
 @admin_bp.route("/settings", methods=["PUT"])
