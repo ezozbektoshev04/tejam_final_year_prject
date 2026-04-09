@@ -7,15 +7,21 @@ food_bp = Blueprint("food_items", __name__)
 
 @food_bp.route("/", methods=["GET"])
 def list_items():
-    # Public browse: only available, non-archived items
-    query = FoodItem.query.filter_by(is_available=True, is_archived=False)
+    # Public browse: only available, non-archived items from approved shop owners
+    query = (
+        FoodItem.query
+        .join(Shop, FoodItem.shop_id == Shop.id)
+        .join(User, Shop.user_id == User.id)
+        .filter(FoodItem.is_available == True, FoodItem.is_archived == False,
+                Shop.is_active == True, User.is_approved == True)
+    )
 
     shop_id = request.args.get("shop_id")
     search = request.args.get("search")
     category = request.args.get("category")
 
     if shop_id:
-        query = query.filter_by(shop_id=int(shop_id))
+        query = query.filter(FoodItem.shop_id == int(shop_id))
     if search:
         query = query.filter(
             db.or_(
@@ -24,7 +30,7 @@ def list_items():
             )
         )
     if category:
-        query = query.join(Shop).filter(Shop.category.ilike(category))
+        query = query.filter(Shop.category.ilike(category))
 
     items = query.order_by(FoodItem.created_at.desc()).all()
     return jsonify([item.to_dict() for item in items])

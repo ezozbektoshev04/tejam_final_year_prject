@@ -85,7 +85,13 @@ def verify_email():
         return jsonify({"error": "User not found"}), 404
 
     if user.is_verified:
-        # Already verified — just log them in
+        # Already verified — check approval for shops before issuing token
+        if user.role == "shop" and not user.is_approved:
+            return jsonify({
+                "pending_approval": True,
+                "email": user.email,
+                "message": "Your shop application is still under review.",
+            })
         access_token = create_access_token(identity=str(user.id))
         return jsonify({"access_token": access_token, "user": _user_response(user)})
 

@@ -118,3 +118,47 @@ def send_shop_approved_email(to: str, name: str, shop_name: str) -> bool:
     </div>
     """
     return _send(to, f"Your shop '{shop_name}' is approved on Tejam 🎉", html)
+
+
+def send_account_deleted_email(to: str, name: str, role: str) -> bool:
+    is_shop = role == "shop"
+    subject = "Your Tejam shop account has been removed" if is_shop else "Your Tejam account has been removed"
+    title = "Your account has been removed"
+    body = (
+        "After a review, your shop owner account and all associated listings have been removed from Tejam. "
+        "If you believe this was a mistake, please contact our support team."
+        if is_shop else
+        "Your Tejam customer account has been removed by our team. "
+        "If you believe this was a mistake, please contact our support team."
+    )
+    html = f"""
+    <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;background:#f9fafb">
+      <div style="background:#fff;border-radius:16px;padding:32px;box-shadow:0 1px 3px rgba(0,0,0,.08)">
+        <div style="text-align:center;margin-bottom:24px">
+          <div style="display:inline-block;background:#1a7548;border-radius:12px;padding:10px 20px">
+            <span style="color:#fff;font-size:20px;font-weight:800;letter-spacing:-0.5px">Tejam</span>
+          </div>
+        </div>
+        <div style="text-align:center;margin-bottom:20px">
+          <div style="display:inline-block;background:#fef2f2;border-radius:50%;padding:16px;font-size:36px">⚠️</div>
+        </div>
+        <h1 style="color:#111827;font-size:22px;font-weight:700;margin:0 0 8px;text-align:center">{title}</h1>
+        <p style="color:#6b7280;font-size:14px;margin:0 0 20px;text-align:center">Hi {name},</p>
+        <p style="color:#374151;font-size:14px;margin:0 0 20px;line-height:1.6">{body}</p>
+        <div style="background:#fef2f2;border-left:4px solid #ef4444;border-radius:8px;padding:14px 16px;margin:0 0 24px">
+          <p style="color:#b91c1c;font-size:13px;margin:0;line-height:1.5">
+            All your data associated with this account is no longer accessible.
+          </p>
+        </div>
+        <hr style="border:none;border-top:1px solid #f3f4f6;margin:24px 0">
+        <p style="color:#9ca3af;font-size:12px;text-align:center;margin:0">
+          If you have questions, contact us at
+          <a href="mailto:support@tejam.uz" style="color:#1a7548">support@tejam.uz</a>
+        </p>
+        <p style="color:#d1d5db;font-size:11px;text-align:center;margin:12px 0 0">
+          © 2026 Tejam · Tashkent, Uzbekistan
+        </p>
+      </div>
+    </div>
+    """
+    return _send(to, subject, html)

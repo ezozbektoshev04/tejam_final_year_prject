@@ -1,13 +1,16 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from models import db, User, Shop, FoodItem
+from sqlalchemy.orm import joinedload
 
 shops_bp = Blueprint("shops", __name__)
 
 
 @shops_bp.route("/", methods=["GET"])
 def list_shops():
-    query = Shop.query.filter_by(is_active=True)
+    query = Shop.query.join(User, Shop.user_id == User.id).filter(
+        Shop.is_active == True, User.is_approved == True
+    )
 
     city = request.args.get("city")
     category = request.args.get("category")

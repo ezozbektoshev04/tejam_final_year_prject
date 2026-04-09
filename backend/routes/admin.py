@@ -2,7 +2,7 @@ import json
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from models import db, User, Shop, Order, FoodItem, PlatformSetting, Notification
-from utils.email import send_shop_approved_email
+from utils.email import send_shop_approved_email, send_account_deleted_email
 
 admin_bp = Blueprint("admin", __name__)
 
@@ -90,8 +90,10 @@ def delete_user(user_id):
     if user.role == "admin":
         return jsonify({"error": "Cannot delete admin account"}), 400
 
+    email, name, role = user.email, user.name, user.role
     db.session.delete(user)
     db.session.commit()
+    send_account_deleted_email(email, name, role)
     return jsonify({"message": "User deleted"})
 
 
@@ -210,8 +212,10 @@ def reject_shop(user_id):
     if user.is_approved:
         return jsonify({"error": "Cannot reject an already approved shop"}), 400
 
+    email, name = user.email, user.name
     db.session.delete(user)
     db.session.commit()
+    send_account_deleted_email(email, name, "shop")
     return jsonify({"message": "Shop application rejected and account removed."})
 
 
