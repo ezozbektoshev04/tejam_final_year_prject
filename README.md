@@ -404,9 +404,9 @@ GEMINI_API_KEY=your-gemini-key
 STRIPE_SECRET_KEY=sk_test_...
 FRONTEND_URL=http://localhost:5173
 
-# Gmail SMTP
-MAIL_USERNAME=your@gmail.com
-MAIL_PASSWORD=your-app-password
+# Gmail SMTP (Google Account → Security → App passwords)
+GMAIL_USER=your@gmail.com
+GMAIL_APP_PASSWORD=xxxx xxxx xxxx xxxx
 ```
 
 Start:
