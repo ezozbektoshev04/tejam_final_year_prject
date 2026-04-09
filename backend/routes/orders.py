@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from models import db, User, Shop, FoodItem, Order, Review, PlatformSetting
 from utils.notifications import create_notification
@@ -182,14 +182,21 @@ def update_status(order_id):
 
     data = request.get_json()
     new_status = data.get("status")
-    valid_statuses = ["pending", "confirmed", "picked_up", "cancelled"]
-    if new_status not in valid_statuses:
-        return jsonify({"error": f"Invalid status. Must be one of: {valid_statuses}"}), 400
+
+    # Allowed transitions — strict state machine
+    allowed_transitions = {
+        "pending":   ["confirmed", "cancelled"],
+        "confirmed": ["picked_up"],
+    }
 
     if order.status == "picked_up":
         return jsonify({"error": "Cannot change status of an already picked up order"}), 400
     if order.status == "cancelled":
         return jsonify({"error": "Cannot change status of a cancelled order"}), 400
+
+    allowed = allowed_transitions.get(order.status, [])
+    if new_status not in allowed:
+        return jsonify({"error": f"Cannot transition from '{order.status}' to '{new_status}'. Allowed: {allowed}"}), 400
 
     order.status = new_status
 
@@ -220,6 +227,22 @@ def cancel_order(order_id):
 
     if order.status not in ("pending", "pending_payment"):
         return jsonify({"error": "Only pending orders can be cancelled"}), 400
+
+    # Refund online payment if Stripe was charged (status=pending means payment went through)
+    if order.payment_method == "online" and order.status == "pending":
+        try:
+            import stripe
+            stripe.api_key = current_app.config.get("STRIPE_SECRET_KEY", "")
+            if stripe.api_key:
+                # Find the Stripe PaymentIntent via the order metadata
+                sessions = stripe.checkout.Session.list(limit=10)
+                for s in sessions.auto_paging_iter():
+                    if s.get("metadata", {}).get("order_id") == str(order.id):
+                        if s.payment_intent:
+                            stripe.Refund.create(payment_intent=s.payment_intent)
+                        break
+        except Exception as e:
+            print(f"[REFUND ERROR] order {order.id}: {e}")
 
     # Restore stock only if it was already decremented (pending, not pending_payment)
     if order.status == "pending":
@@ -292,12 +315,12 @@ def create_review(order_id):
     )
     db.session.add(review)
 
-    # Update shop rating
+    # Update shop rating — query existing reviews BEFORE the new one is flushed
     shop = order.food_item.shop
     if shop:
-        all_reviews = Review.query.filter_by(shop_id=shop.id).all()
-        total = sum(r.rating for r in all_reviews) + int(rating)
-        shop.rating = total / (len(all_reviews) + 1)
+        existing_reviews = Review.query.filter_by(shop_id=shop.id).all()
+        all_ratings = [r.rating for r in existing_reviews] + [int(rating)]
+        shop.rating = round(sum(all_ratings) / len(all_ratings), 2)
 
     db.session.commit()
     return jsonify(review.to_dict()), 201

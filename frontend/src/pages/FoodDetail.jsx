@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
+import { formatDate } from '../utils/dateTime'
 import api from '../api/axios'
 import { useAuth } from '../context/AuthContext'
 import MapEmbed from '../components/MapEmbed'
@@ -388,7 +389,7 @@ export default function FoodDetail() {
                   <p className="text-gray-600 text-sm mt-2">{review.comment}</p>
                 )}
                 <p className="text-xs text-gray-400 mt-1">
-                  {new Date(review.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+                  {formatDate(review.created_at, 'date')}
                 </p>
               </div>
             ))}

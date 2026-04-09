@@ -70,14 +70,27 @@ def create_item():
     if shop_id not in shop_ids:
         return jsonify({"error": "Unauthorized shop"}), 403
 
+    original_price = float(data["original_price"])
+    discounted_price = float(data["discounted_price"])
+    quantity = int(data.get("quantity", 1))
+
+    if original_price <= 0:
+        return jsonify({"error": "Original price must be greater than 0"}), 400
+    if discounted_price <= 0:
+        return jsonify({"error": "Discounted price must be greater than 0"}), 400
+    if discounted_price >= original_price:
+        return jsonify({"error": "Discounted price must be less than original price"}), 400
+    if quantity < 1:
+        return jsonify({"error": "Quantity must be at least 1"}), 400
+
     item = FoodItem(
         shop_id=shop_id,
         name=data["name"],
         description=data.get("description", ""),
         contents_hint=data.get("contents_hint", ""),
-        original_price=float(data["original_price"]),
-        discounted_price=float(data["discounted_price"]),
-        quantity=int(data.get("quantity", 1)),
+        original_price=original_price,
+        discounted_price=discounted_price,
+        quantity=quantity,
         pickup_start=data.get("pickup_start", "17:00"),
         pickup_end=data.get("pickup_end", "20:00"),
         image_url=data.get("image_url", ""),
@@ -102,6 +115,16 @@ def update_item(item_id):
     data = request.get_json()
     if not data:
         return jsonify({"error": "No data provided"}), 400
+
+    # Price validation
+    new_original   = float(data["original_price"])   if "original_price"   in data else item.original_price
+    new_discounted = float(data["discounted_price"])  if "discounted_price"  in data else item.discounted_price
+    if new_original <= 0:
+        return jsonify({"error": "Original price must be greater than 0"}), 400
+    if new_discounted <= 0:
+        return jsonify({"error": "Discounted price must be greater than 0"}), 400
+    if new_discounted >= new_original:
+        return jsonify({"error": "Discounted price must be less than original price"}), 400
 
     # Block making available if quantity is 0
     if data.get("is_available") is True:

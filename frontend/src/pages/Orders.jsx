@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { QRCodeSVG } from 'qrcode.react'
 import api from '../api/axios'
+import { formatDate } from '../utils/dateTime'
 
 const STATUS_CONFIG = {
   pending_payment: { label: 'Awaiting payment', color: 'bg-amber-100 text-amber-700',    icon: '💳' },
@@ -153,7 +154,7 @@ export default function Orders() {
                           × {order.quantity}
                         </span>
                         <span className="text-xs text-gray-400">
-                          {new Date(order.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                          {formatDate(order.created_at, 'date')}
                         </span>
                       </div>
                     </div>

@@ -8,6 +8,11 @@ from utils.email import send_verification_email, send_reset_email
 auth_bp = Blueprint("auth", __name__)
 bcrypt = Bcrypt()
 
+# In-memory failed attempt tracker: {user_id: fail_count}
+# Resets on correct code or when a new code is generated
+_verify_attempts: dict = {}
+MAX_VERIFY_ATTEMPTS = 5
+
 
 def _user_response(user):
     data = user.to_dict()
@@ -83,15 +88,27 @@ def verify_email():
         access_token = create_access_token(identity=str(user.id))
         return jsonify({"access_token": access_token, "user": _user_response(user)})
 
+    # Rate limit: block after too many failed attempts
+    attempts = _verify_attempts.get(user.id, 0)
+    if attempts >= MAX_VERIFY_ATTEMPTS:
+        return jsonify({"error": "Too many failed attempts. Please request a new code."}), 429
+
     vc = VerificationCode.query.filter_by(
         user_id=user.id, purpose="register", is_used=False
     ).order_by(VerificationCode.created_at.desc()).first()
 
     if not vc or vc.code != code:
-        return jsonify({"error": "Invalid code. Please check and try again."}), 400
+        _verify_attempts[user.id] = attempts + 1
+        remaining = MAX_VERIFY_ATTEMPTS - _verify_attempts[user.id]
+        msg = "Invalid code. Please check and try again."
+        if remaining <= 2:
+            msg += f" {remaining} attempt{'s' if remaining != 1 else ''} remaining."
+        return jsonify({"error": msg}), 400
     if vc.expires_at < datetime.utcnow():
         return jsonify({"error": "Code has expired. Please request a new one."}), 400
 
+    # Success — clear attempt counter
+    _verify_attempts.pop(user.id, None)
     vc.is_used = True
     user.is_verified = True
     db.session.commit()
@@ -109,6 +126,9 @@ def resend_code():
     user = User.query.filter_by(email=email).first()
     if not user:
         return jsonify({"error": "No account with that email."}), 404
+
+    # Reset failed attempt counter when a new code is requested
+    _verify_attempts.pop(user.id, None)
 
     if purpose == "register" and user.is_verified:
         return jsonify({"error": "Account already verified."}), 400

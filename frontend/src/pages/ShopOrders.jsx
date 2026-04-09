@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import api from '../api/axios'
+import { splitDateTime } from '../utils/dateTime'
 
 const STATUS_CONFIG = {
   pending:         { label: 'Pending',          color: 'bg-yellow-100 text-yellow-700',   next: 'confirmed' },
@@ -307,10 +308,10 @@ export default function ShopOrders() {
                       >
                         <td className="px-4 py-3 text-gray-500 font-mono text-xs">{order.order_ref}</td>
                         <td className="px-4 py-3 text-gray-500 whitespace-nowrap">
-                          {new Date(order.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                          {splitDateTime(order.created_at).date}
                           {' '}
                           <span className="text-gray-400 text-xs">
-                            {new Date(order.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                            {splitDateTime(order.created_at).time}
                           </span>
                         </td>
                         {!shopId && shops.length > 1 && (

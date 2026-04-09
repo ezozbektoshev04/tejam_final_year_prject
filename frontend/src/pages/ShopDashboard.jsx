@@ -81,13 +81,12 @@ export default function ShopDashboard() {
 
       const [statsRes, ordersRes, shopsRes] = await Promise.all([
         api.get(`/orders/stats?${params}`),
-        api.get('/orders/'),
+        api.get(`/orders/?status=pending&per_page=100${selectedShopId ? `&shop_id=${selectedShopId}` : ''}`),
         api.get('/shops/my'),
       ])
       setStats(statsRes.data)
       const allOrders = ordersRes.data.orders || []
-      const pending = allOrders.filter(o => o.status === 'pending')
-      setOrders(selectedShopId ? pending.filter(o => o.shop_id === selectedShopId) : pending)
+      setOrders(allOrders.filter(o => o.status === 'pending'))
       setShops(shopsRes.data)
     } catch (err) {
       console.error(err)

@@ -62,6 +62,8 @@ export default function Profile() {
             city: s.city || '',
             category: s.category || '',
             image_url: s.image_url || '',
+            lat: s.lat ?? '',
+            lng: s.lng ?? '',
           })
         }
       }).catch(() => {})
@@ -95,6 +97,8 @@ export default function Profile() {
       city: s.city || '',
       category: s.category || '',
       image_url: s.image_url || '',
+      lat: s.lat ?? '',
+      lng: s.lng ?? '',
     })
     setShopMsg(null)
   }
@@ -319,6 +323,30 @@ export default function Profile() {
                   className="input-field"
                   value={shopForm.city || ''}
                   onChange={e => setShopForm(f => ({ ...f, city: e.target.value }))}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Latitude</label>
+                <input
+                  type="number"
+                  step="any"
+                  className="input-field"
+                  value={shopForm.lat ?? ''}
+                  onChange={e => setShopForm(f => ({ ...f, lat: e.target.value ? parseFloat(e.target.value) : '' }))}
+                  placeholder="e.g. 41.2995"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Longitude</label>
+                <input
+                  type="number"
+                  step="any"
+                  className="input-field"
+                  value={shopForm.lng ?? ''}
+                  onChange={e => setShopForm(f => ({ ...f, lng: e.target.value ? parseFloat(e.target.value) : '' }))}
+                  placeholder="e.g. 69.2401"
                 />
               </div>
             </div>

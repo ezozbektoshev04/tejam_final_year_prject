@@ -63,7 +63,7 @@ def update_shop(shop_id):
     if not data:
         return jsonify({"error": "No data provided"}), 400
 
-    updatable = ["name", "description", "address", "city", "category", "image_url", "is_active"]
+    updatable = ["name", "description", "address", "city", "category", "image_url", "is_active", "lat", "lng"]
     for field in updatable:
         if field in data:
             setattr(shop, field, data[field])

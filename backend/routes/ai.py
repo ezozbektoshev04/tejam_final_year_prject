@@ -44,7 +44,7 @@ def get_recommendations():
     )
 
     # Get all currently available listings
-    available_items = FoodItem.query.filter_by(is_available=True).limit(30).all()
+    available_items = FoodItem.query.filter_by(is_available=True, is_archived=False).limit(30).all()
 
     if not available_items:
         return jsonify({"recommendations": []})
@@ -316,7 +316,7 @@ def _build_live_context(user):
     # ── CUSTOMER ─────────────────────────────────────────────────────────────
     elif user.role == "customer":
         # All available listings on the platform
-        available_items = FoodItem.query.filter_by(is_available=True).all()
+        available_items = FoodItem.query.filter_by(is_available=True, is_archived=False).all()
         if available_items:
             lines.append(f"Currently available listings on Tejam ({len(available_items)} items):")
             # Sort by discount descending

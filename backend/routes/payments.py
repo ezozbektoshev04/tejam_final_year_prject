@@ -113,11 +113,18 @@ def verify_payment():
         return jsonify({"error": "Session / order mismatch"}), 400
 
     # Confirm the order and decrement stock
-    order.status = "pending"
     item = order.food_item
-    item.quantity = max(0, item.quantity - order.quantity)
+    if item.quantity < order.quantity:
+        # Item sold out between checkout start and payment confirmation — cancel and refund
+        order.status = "cancelled"
+        db.session.commit()
+        return jsonify({"error": "Sorry, this item sold out while your payment was processing. You will be refunded automatically."}), 409
+
+    order.status = "pending"
+    item.quantity -= order.quantity
     if item.quantity == 0:
         item.is_available = False
+        item.is_archived = True
 
     db.session.commit()
     return jsonify(order.to_dict())
