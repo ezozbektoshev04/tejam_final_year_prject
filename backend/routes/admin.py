@@ -2,6 +2,7 @@ import json
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from models import db, User, Shop, Order, FoodItem, PlatformSetting, Notification
+from utils.email import send_shop_approved_email
 
 admin_bp = Blueprint("admin", __name__)
 
@@ -185,6 +186,7 @@ def approve_shop(user_id):
         return jsonify({"error": "User is not a shop owner"}), 400
 
     user.is_approved = True
+    shop_name = user.shops[0].name if user.shops else user.name
     notif = Notification(
         user_id=user.id,
         message="Your shop has been approved! You can now log in and start listing your surplus food.",
@@ -192,6 +194,7 @@ def approve_shop(user_id):
     )
     db.session.add(notif)
     db.session.commit()
+    send_shop_approved_email(user.email, user.name, shop_name)
     return jsonify({"message": f"Shop owner '{user.name}' approved successfully."})
 
 
