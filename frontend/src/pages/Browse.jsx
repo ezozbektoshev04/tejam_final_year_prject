@@ -4,19 +4,12 @@ import api from '../api/axios'
 import FoodCard from '../components/FoodCard'
 import ShopCard from '../components/ShopCard'
 import ShopsMap from '../components/ShopsMap'
+import Pagination from '../components/Pagination'
 import { useAuth } from '../context/AuthContext'
 import { haversineKm } from '../utils/distance'
 
 const CATEGORIES = ['All categories', 'Bakery', 'Restaurant', 'Grocery', 'Cafe', 'Fast Food', 'Sweets']
 
-function isPickupNow(pickupStart, pickupEnd) {
-  if (!pickupStart || !pickupEnd) return false
-  const now = new Date()
-  const cur = now.getHours() * 60 + now.getMinutes()
-  const [sh, sm] = pickupStart.split(':').map(Number)
-  const [eh, em] = pickupEnd.split(':').map(Number)
-  return cur >= sh * 60 + sm && cur <= eh * 60 + em
-}
 
 export default function Browse() {
   // All hooks must come before any early return
@@ -39,23 +32,31 @@ export default function Browse() {
   const [recommendations, setRecommendations] = useState([]) // { id, reason }
   const [recItems, setRecItems] = useState([])              // full FoodItem objects
   const [recLoading, setRecLoading] = useState(false)
+  const [page, setPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
+  const [totalItems, setTotalItems] = useState(0)
+  const PER_PAGE = 12
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (pageNum = 1) => {
     setLoading(true)
-    const params = { city: 'Tashkent' }
+    const params = { city: 'Tashkent', page: pageNum, per_page: PER_PAGE }
     if (searchText) params.search = searchText
     if (category !== 'All categories') params.category = category
     if (shopFilter) params.shop_id = shopFilter
+    if (availableNow) params.available_now = 'true'
 
     try {
       const [foodRes, shopsRes] = await Promise.all([
         api.get('/food-items/', { params }),
-        shopFilter ? Promise.resolve({ data: [] }) : api.get('/shops/', { params }),
+        shopFilter ? Promise.resolve({ data: [] }) : api.get('/shops/', { params: { city: 'Tashkent', ...(category !== 'All categories' && { category }), ...(searchText && { search: searchText }) } }),
       ])
-      setFoodItems(foodRes.data)
+      const foodData = foodRes.data
+      setFoodItems(foodData.items ?? foodData)
+      setTotalItems(foodData.total ?? (foodData.items ?? foodData).length)
+      setTotalPages(foodData.pages ?? 1)
+      setPage(foodData.page ?? pageNum)
       setShops(shopsRes.data)
 
-      // If filtering by shop, fetch shop info for the header
       if (shopFilter) {
         const shopRes = await api.get(`/shops/${shopFilter}`)
         setSelectedShop(shopRes.data)
@@ -68,10 +69,11 @@ export default function Browse() {
     } finally {
       setLoading(false)
     }
-  }, [searchText, category, shopFilter])
+  }, [searchText, category, shopFilter, availableNow])
 
   useEffect(() => {
-    const timeout = setTimeout(fetchData, 300)
+    setPage(1)
+    const timeout = setTimeout(() => fetchData(1), 300)
     return () => clearTimeout(timeout)
   }, [fetchData])
 
@@ -138,10 +140,6 @@ export default function Browse() {
       { timeout: 10000, enableHighAccuracy: false, maximumAge: 60000 }
     )
   }
-
-  const visibleItems = availableNow
-    ? foodItems.filter(item => isPickupNow(item.pickup_start, item.pickup_end))
-    : foodItems
 
   const shopsWithDistance = shops.map(shop => ({
     ...shop,
@@ -330,7 +328,7 @@ export default function Browse() {
       {!selectedShop && (
         <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit mb-6">
           {[
-            { key: 'food', label: `Food items (${visibleItems.length})` },
+            { key: 'food', label: `Food items (${totalItems})` },
             { key: 'shops', label: `Shops (${sortedShops.length})` },
             { key: 'map', label: '📍 Map' },
           ].map(tab => (
@@ -364,16 +362,27 @@ export default function Browse() {
       ) : activeTab === 'map' ? (
         <ShopsMap shops={sortedShops} foodItems={foodItems} userLocation={userLocation} />
       ) : (activeTab === 'food' || selectedShop) ? (
-        visibleItems.length === 0 ? (
+        foodItems.length === 0 ? (
           <EmptyState
             icon="⏰"
             title={availableNow ? 'No pickups available right now' : 'No food items found'}
             description={availableNow ? 'Check back later or turn off the filter' : 'Try adjusting your search or category filter'}
           />
         ) : (
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {visibleItems.map(item => <FoodCard key={item.id} item={item} />)}
-          </div>
+          <>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {foodItems.map(item => <FoodCard key={item.id} item={item} />)}
+            </div>
+            {totalPages > 1 && (
+              <Pagination
+                page={page}
+                totalPages={totalPages}
+                totalItems={totalItems}
+                perPage={PER_PAGE}
+                onPageChange={(p) => { setPage(p); fetchData(p); window.scrollTo({ top: 0, behavior: 'smooth' }) }}
+              />
+            )}
+          </>
         )
       ) : (
         sortedShops.length === 0 ? (
@@ -411,3 +420,4 @@ function EmptyState({ icon, title, description }) {
     </div>
   )
 }
+

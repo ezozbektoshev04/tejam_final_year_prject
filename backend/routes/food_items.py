@@ -32,8 +32,57 @@ def list_items():
     if category:
         query = query.filter(Shop.category.ilike(category))
 
-    items = query.order_by(FoodItem.created_at.desc()).all()
-    return jsonify([item.to_dict() for item in items])
+    available_now = request.args.get("available_now") == "true"
+    if available_now:
+        from datetime import datetime
+        now = datetime.now()
+        cur = now.hour * 60 + now.minute
+        query = query.filter(
+            FoodItem.pickup_start.isnot(None),
+            FoodItem.pickup_end.isnot(None),
+        )
+        # Filter in Python after fetching (SQLite has no time math)
+        items_all = query.order_by(FoodItem.created_at.desc()).all()
+        def _in_window(item):
+            try:
+                sh, sm = map(int, item.pickup_start.split(':'))
+                eh, em = map(int, item.pickup_end.split(':'))
+                return sh * 60 + sm <= cur <= eh * 60 + em
+            except Exception:
+                return False
+        items_all = [i for i in items_all if _in_window(i)]
+        total = len(items_all)
+        try:
+            page = max(1, int(request.args.get("page", 1)))
+            per_page = max(1, int(request.args.get("per_page", 12)))
+        except ValueError:
+            page, per_page = 1, 12
+        start = (page - 1) * per_page
+        items = items_all[start:start + per_page]
+        return jsonify({
+            "items": [item.to_dict() for item in items],
+            "total": total,
+            "page": page,
+            "per_page": per_page,
+            "pages": max(1, -(-total // per_page)),
+        })
+
+    try:
+        page = max(1, int(request.args.get("page", 1)))
+        per_page = max(1, int(request.args.get("per_page", 12)))
+    except ValueError:
+        page, per_page = 1, 12
+
+    total = query.count()
+    items = query.order_by(FoodItem.created_at.desc()).offset((page - 1) * per_page).limit(per_page).all()
+
+    return jsonify({
+        "items": [item.to_dict() for item in items],
+        "total": total,
+        "page": page,
+        "per_page": per_page,
+        "pages": max(1, -(-total // per_page)),
+    })
 
 
 @food_bp.route("/<int:item_id>", methods=["GET"])

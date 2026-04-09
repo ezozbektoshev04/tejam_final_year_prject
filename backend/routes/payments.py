@@ -1,7 +1,7 @@
 import stripe
 from flask import Blueprint, jsonify, request, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from models import db, FoodItem, Order
+from models import db, FoodItem, Order, PlatformSetting
 
 payments_bp = Blueprint("payments", __name__)
 
@@ -25,14 +25,19 @@ def create_checkout_session():
         return jsonify({"error": "Item not available in requested quantity"}), 400
 
     # Create order pre-payment
+    total_price = item.discounted_price * quantity
+    rate = PlatformSetting.get("commission_rate", 0.10)
     order = Order(
         customer_id=user_id,
         food_item_id=food_item_id,
         quantity=quantity,
-        total_price=item.discounted_price * quantity,
+        total_price=total_price,
         status="pending_payment",
         payment_method="online",
         notes=notes,
+        commission_rate=round(float(rate), 4),
+        commission_amount=round(total_price * float(rate), 2),
+        shop_payout=round(total_price - total_price * float(rate), 2),
     )
     db.session.add(order)
     db.session.commit()

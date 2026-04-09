@@ -7,6 +7,14 @@ from utils.notifications import create_notification
 orders_bp = Blueprint("orders", __name__)
 
 
+def _apply_commission(order):
+    """Calculate and set commission_rate, commission_amount, shop_payout on an order."""
+    rate = PlatformSetting.get("commission_rate", 0.10)
+    order.commission_rate   = round(float(rate), 4)
+    order.commission_amount = round(order.total_price * order.commission_rate, 2)
+    order.shop_payout       = round(order.total_price - order.commission_amount, 2)
+
+
 @orders_bp.route("/", methods=["GET"])
 @jwt_required()
 def list_orders():
@@ -14,8 +22,46 @@ def list_orders():
     user = User.query.get_or_404(user_id)
 
     if user.role == "customer":
-        orders = Order.query.filter_by(customer_id=user_id).order_by(Order.created_at.desc()).all()
-        return jsonify([o.to_dict() for o in orders])
+        try:
+            page = max(1, int(request.args.get("page", 1)))
+            per_page = max(1, int(request.args.get("per_page", 10)))
+        except ValueError:
+            page, per_page = 1, 10
+
+        base = Order.query.filter_by(customer_id=user_id)
+
+        # Status counts for tabs (always computed on full set)
+        active_statuses = ["pending_payment", "pending", "confirmed"]
+        status_counts = {
+            "active":    base.filter(Order.status.in_(active_statuses)).count(),
+            "completed": base.filter(Order.status == "picked_up").count(),
+            "cancelled": base.filter(Order.status == "cancelled").count(),
+        }
+        total_spent = db.session.query(db.func.sum(Order.total_price)).filter(
+            Order.customer_id == user_id, Order.status == "picked_up"
+        ).scalar() or 0
+
+        # Apply tab filter
+        tab = request.args.get("tab", "active")
+        query = base.order_by(Order.created_at.desc())
+        if tab == "active":
+            query = query.filter(Order.status.in_(active_statuses))
+        elif tab == "completed":
+            query = query.filter(Order.status == "picked_up")
+        elif tab == "cancelled":
+            query = query.filter(Order.status == "cancelled")
+
+        total = query.count()
+        orders = query.offset((page - 1) * per_page).limit(per_page).all()
+        return jsonify({
+            "orders": [o.to_dict() for o in orders],
+            "total": total,
+            "page": page,
+            "per_page": per_page,
+            "pages": max(1, -(-total // per_page)),
+            "status_counts": status_counts,
+            "total_spent": round(total_spent),
+        })
 
     elif user.role == "shop" and user.shops:
         # --- optional filters ---
@@ -76,7 +122,7 @@ def list_orders():
         })
 
     else:
-        return jsonify({"error": "Unauthorized"}), 403
+        return jsonify({"error": "This endpoint is for customer accounts only"}), 403
 
 
 @orders_bp.route("/", methods=["POST"])
@@ -115,6 +161,7 @@ def create_order():
         payment_method="cash",
         notes=data.get("notes", ""),
     )
+    _apply_commission(order)
 
     # Reduce available quantity
     item.quantity -= quantity
@@ -370,9 +417,11 @@ def shop_stats():
     all_orders = Order.query.filter(Order.food_item_id.in_(food_ids)).all() if food_ids else []
     completed  = [o for o in all_orders if o.status in ("confirmed", "picked_up")]
 
-    total_revenue = sum(o.total_price for o in completed)
-    total_orders  = len(all_orders)
-    items_listed  = len(food_ids)
+    total_revenue    = sum(o.total_price for o in completed)
+    total_payout     = sum(o.shop_payout or 0 for o in completed)
+    commission_total = sum(o.commission_amount or 0 for o in completed)
+    total_orders     = len(all_orders)
+    items_listed     = len(food_ids)
 
     # Revenue chart — one entry per day in selected range
     num_days = (range_end - range_start).days + 1
@@ -384,7 +433,7 @@ def shop_stats():
     for o in completed:
         day_key = o.created_at.date().isoformat()
         if day_key in daily_revenue:
-            daily_revenue[day_key] += o.total_price
+            daily_revenue[day_key] += o.shop_payout or 0
 
     revenue_chart = [
         {"date": k, "revenue": v}
@@ -402,7 +451,7 @@ def shop_stats():
     category_revenue = {}
     for o in completed:
         cat = o.food_item.shop.category if o.food_item and o.food_item.shop else "Other"
-        category_revenue[cat] = category_revenue.get(cat, 0) + o.total_price
+        category_revenue[cat] = category_revenue.get(cat, 0) + (o.shop_payout or 0)
     category_chart = sorted(
         [{"category": k, "revenue": v} for k, v in category_revenue.items()],
         key=lambda x: x["revenue"], reverse=True
@@ -421,16 +470,18 @@ def shop_stats():
     )[:5]
 
     return jsonify({
-        "total_revenue":  total_revenue,
-        "total_orders":   total_orders,
-        "items_listed":   items_listed,
-        "avg_rating":     round(avg_rating, 2),
-        "revenue_chart":  revenue_chart,
-        "status_chart":   status_chart,
-        "category_chart": category_chart,
-        "top_items":      top_items,
-        "range_start":    range_start.isoformat(),
-        "range_end":      range_end.isoformat(),
+        "total_revenue":    total_revenue,
+        "total_payout":     round(total_payout, 2),
+        "commission_total": round(commission_total, 2),
+        "total_orders":     total_orders,
+        "items_listed":     items_listed,
+        "avg_rating":       round(avg_rating, 2),
+        "revenue_chart":    revenue_chart,
+        "status_chart":     status_chart,
+        "category_chart":   category_chart,
+        "top_items":        top_items,
+        "range_start":      range_start.isoformat(),
+        "range_end":        range_end.isoformat(),
     })
 
 

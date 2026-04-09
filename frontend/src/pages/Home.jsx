@@ -55,7 +55,7 @@ export default function Home() {
       api.get('/food-items/').catch(() => ({ data: [] })),
     ]).then(([shopsRes, itemsRes]) => {
       setFeaturedShops(shopsRes.data.slice(0, 3))
-      setFeaturedItems(itemsRes.data.slice(0, 6))
+      setFeaturedItems((itemsRes.data.items ?? itemsRes.data).slice(0, 6))
     }).finally(() => setLoading(false))
   }, [])
 

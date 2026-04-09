@@ -91,8 +91,10 @@ def export_report():
     completed = [o for o in orders if o.status in ("confirmed", "picked_up")]
     cancelled = [o for o in orders if o.status == "cancelled"]
 
-    total_revenue = sum(o.total_price for o in completed)
-    avg_order_value = total_revenue / len(completed) if completed else 0
+    total_revenue     = sum(o.total_price for o in completed)
+    total_commission  = sum(o.commission_amount or 0 for o in completed)
+    total_payout      = sum(o.shop_payout or 0 for o in completed)
+    avg_order_value   = total_revenue / len(completed) if completed else 0
 
     top_item_name = "—"
     if completed:
@@ -153,6 +155,8 @@ def export_report():
         ("Cancelled orders", len(cancelled)),
         ("", ""),
         ("Total revenue (UZS)", total_revenue),
+        ("Platform commission (UZS)", round(total_commission)),
+        ("Shop payout (UZS)", round(total_payout)),
         ("Avg order value (UZS)", round(avg_order_value)),
         ("Top-selling item", top_item_name),
     ]
@@ -162,7 +166,7 @@ def export_report():
         ws1.cell(row=i, column=2, value=value)
         if i == 1:
             ws1.cell(row=i, column=1).font = Font(bold=True, size=14, color="1a7548")
-        elif label in ("Total revenue (UZS)", "Avg order value (UZS)"):
+        elif label in ("Total revenue (UZS)", "Platform commission (UZS)", "Shop payout (UZS)", "Avg order value (UZS)"):
             ws1.cell(row=i, column=2).font = Font(bold=True, color="1a7548")
         elif label and value:
             ws1.cell(row=i, column=1).font = SUBHEADER_FONT
@@ -175,7 +179,8 @@ def export_report():
     # =====================
     ws2 = wb.create_sheet("Orders")
     headers2 = ["Order ID", "Date & Time", "Branch", "Item", "Qty",
-                 "Unit Price (UZS)", "Total (UZS)", "Status", "Payment"]
+                 "Unit Price (UZS)", "Total (UZS)", "Commission (%)", "Commission (UZS)",
+                 "Shop Payout (UZS)", "Status", "Payment"]
     for col, h in enumerate(headers2, start=1):
         ws2.cell(row=1, column=col, value=h)
     style_header_row(ws2, 1, len(headers2))
@@ -191,9 +196,12 @@ def export_report():
         ws2.cell(row=row_i, column=4, value=item.name if item else "—")
         ws2.cell(row=row_i, column=5, value=o.quantity)
         ws2.cell(row=row_i, column=6, value=unit_price)
-        ws2.cell(row=row_i, column=7, value=round(o.total_price))
-        ws2.cell(row=row_i, column=8, value=o.status)
-        ws2.cell(row=row_i, column=9, value=o.payment_method or "cash")
+        ws2.cell(row=row_i, column=7,  value=round(o.total_price))
+        ws2.cell(row=row_i, column=8,  value=round((o.commission_rate or 0) * 100, 1))
+        ws2.cell(row=row_i, column=9,  value=round(o.commission_amount or 0))
+        ws2.cell(row=row_i, column=10, value=round(o.shop_payout or 0))
+        ws2.cell(row=row_i, column=11, value=o.status)
+        ws2.cell(row=row_i, column=12, value=o.payment_method or "cash")
 
     auto_width(ws2)
 

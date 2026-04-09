@@ -135,6 +135,9 @@ class Order(db.Model):
     notes = db.Column(db.Text)
     pickup_token = db.Column(db.String(36), unique=True, default=lambda: str(uuid.uuid4()))
     order_ref = db.Column(db.String(12), unique=True, default=lambda: _gen_order_ref())
+    commission_rate   = db.Column(db.Float, default=0.10)   # e.g. 0.10 = 10%
+    commission_amount = db.Column(db.Float, default=0.0)    # platform earns this
+    shop_payout       = db.Column(db.Float, default=0.0)    # shop receives this
 
     review = db.relationship("Review", backref="order", uselist=False, lazy=True)
 
@@ -162,6 +165,9 @@ class Order(db.Model):
             "notes": self.notes,
             "order_ref": self.order_ref or f"TJ-{self.id:06d}",
             "review": self.review.to_dict() if self.review else None,
+            "commission_rate":   self.commission_rate or 0.10,
+            "commission_amount": self.commission_amount or 0.0,
+            "shop_payout":       self.shop_payout or 0.0,
         }
 
 

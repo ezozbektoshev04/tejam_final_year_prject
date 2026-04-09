@@ -142,7 +142,7 @@ export default function ShopOrders() {
   const pendingCount       = orders.filter(o => o.status === 'pending').length
   const awaitingPayment    = orders.filter(o => o.status === 'pending_payment').length
   const paidOnlineCount    = orders.filter(o => o.payment_method === 'online' && o.status !== 'pending_payment' && o.status !== 'cancelled').length
-  const totalRevenue       = completedOrders.reduce((s, o) => s + o.total_price, 0)
+  const totalRevenue       = completedOrders.reduce((s, o) => s + (o.shop_payout || o.total_price), 0)
   const totalPages         = Math.ceil(total / PER_PAGE)
 
   return (
@@ -161,7 +161,7 @@ export default function ShopOrders() {
         </div>
         <div className="card p-4 text-center">
           <p className="text-2xl font-bold text-primary-600">{formatPrice(totalRevenue)}</p>
-          <p className="text-xs text-gray-500 mt-0.5">Revenue (this page)</p>
+          <p className="text-xs text-gray-500 mt-0.5">Your earnings (this page)</p>
         </div>
         <div className="card p-4 text-center relative">
           <p className="text-2xl font-bold text-yellow-600">{pendingCount}</p>
@@ -365,6 +365,19 @@ export default function ShopOrders() {
                                 <span className={`badge text-xs font-medium ${ps.color}`}>{ps.label}</span>
                                 <p className="text-xs text-gray-400 mt-1">
                                   Method: {order.payment_method === 'online' ? '💳 Online (Stripe)' : '🏪 Pay in store'}
+                                </p>
+                              </div>
+                                <div>
+                                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Payout breakdown</p>
+                                <p className="text-gray-800">
+                                  <span className="text-gray-500">Revenue:</span> {formatPrice(order.total_price)}
+                                </p>
+                                <p className="text-gray-800">
+                                  <span className="text-gray-500">Commission ({Math.round((order.commission_rate || 0.10) * 100)}%):</span>{' '}
+                                  <span className="text-red-600">−{formatPrice(order.commission_amount || 0)}</span>
+                                </p>
+                                <p className="font-semibold text-primary-700 mt-0.5">
+                                  Your payout: {formatPrice(order.shop_payout || 0)}
                                 </p>
                               </div>
                               {order.notes ? (

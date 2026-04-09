@@ -1,8 +1,9 @@
 import json
+from datetime import datetime, timedelta
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from models import db, User, Shop, Order, FoodItem, PlatformSetting, Notification
-from utils.email import send_shop_approved_email, send_account_deleted_email
+from utils.email import send_shop_approved_email, send_account_deleted_email, send_shop_status_email
 
 admin_bp = Blueprint("admin", __name__)
 
@@ -129,6 +130,11 @@ def toggle_shop(shop_id):
     shop = Shop.query.get_or_404(shop_id)
     shop.is_active = not shop.is_active
     db.session.commit()
+
+    owner = User.query.get(shop.user_id)
+    if owner:
+        send_shop_status_email(owner.email, owner.name, shop.name, deactivated=not shop.is_active)
+
     return jsonify({"id": shop.id, "is_active": shop.is_active})
 
 
@@ -139,6 +145,7 @@ ALLOWED_KEYS = {
     "min_discount_percent",
     "max_discount_percent",
     "low_stock_threshold",
+    "commission_rate",
     "notification_order_placed",
     "notification_order_confirmed",
     "notification_order_picked_up",
@@ -217,6 +224,60 @@ def reject_shop(user_id):
     db.session.commit()
     send_account_deleted_email(email, name, "shop")
     return jsonify({"message": "Shop application rejected and account removed."})
+
+
+@admin_bp.route("/earnings", methods=["GET"])
+@jwt_required()
+def earnings():
+    if not require_admin():
+        return jsonify({"error": "Admin access required"}), 403
+
+    completed = Order.query.filter_by(status="picked_up").all()
+
+    total_commission = sum(o.commission_amount or 0 for o in completed)
+    total_revenue    = sum(o.total_price for o in completed)
+    total_payout     = sum(o.shop_payout or 0 for o in completed)
+
+    now = datetime.utcnow()
+    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    last_month_start = (month_start - timedelta(days=1)).replace(day=1)
+
+    this_month_commission = sum(
+        o.commission_amount or 0 for o in completed if o.created_at >= month_start
+    )
+    last_month_commission = sum(
+        o.commission_amount or 0 for o in completed
+        if last_month_start <= o.created_at < month_start
+    )
+
+    from collections import defaultdict
+    shop_stats = defaultdict(lambda: {"orders": 0, "revenue": 0.0, "commission": 0.0, "payout": 0.0})
+    for o in completed:
+        item = o.food_item
+        if item and item.shop:
+            key = item.shop.id
+            shop_stats[key]["shop_id"]   = key
+            shop_stats[key]["shop_name"] = item.shop.name
+            shop_stats[key]["orders"]    += 1
+            shop_stats[key]["revenue"]   += o.total_price
+            shop_stats[key]["commission"] += o.commission_amount or 0
+            shop_stats[key]["payout"]    += o.shop_payout or 0
+
+    per_shop = sorted(shop_stats.values(), key=lambda x: x["commission"], reverse=True)
+    for s in per_shop:
+        s["revenue"]    = round(s["revenue"])
+        s["commission"] = round(s["commission"])
+        s["payout"]     = round(s["payout"])
+
+    return jsonify({
+        "total_commission":      round(total_commission),
+        "total_revenue":         round(total_revenue),
+        "total_payout":          round(total_payout),
+        "this_month_commission": round(this_month_commission),
+        "last_month_commission": round(last_month_commission),
+        "completed_orders":      len(completed),
+        "per_shop":              per_shop,
+    })
 
 
 @admin_bp.route("/settings", methods=["PUT"])

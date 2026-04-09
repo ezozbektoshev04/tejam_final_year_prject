@@ -67,6 +67,7 @@ def _seed_settings():
         "notification_order_confirmed": "Great news! Your order {ref} has been confirmed by the shop. Head over and show your QR code!",
         "notification_order_picked_up": "Enjoy your meal! Order {ref} — '{item}' has been picked up. Thanks for choosing Tejam and helping reduce food waste!",
         "notification_order_cancelled": "Your order {ref} for '{item}' was cancelled by the shop. Sorry for the inconvenience!",
+        "commission_rate": 0.10,
     }
     for key, value in defaults.items():
         if not PlatformSetting.query.filter_by(key=key).first():
@@ -86,6 +87,9 @@ def _migrate_db():
             "ALTER TABLE users ADD COLUMN is_verified BOOLEAN DEFAULT 0",
             "ALTER TABLE food_items ADD COLUMN contents_hint TEXT",
             "ALTER TABLE users ADD COLUMN is_approved BOOLEAN DEFAULT 1",
+            "ALTER TABLE orders ADD COLUMN commission_rate REAL DEFAULT 0.10",
+            "ALTER TABLE orders ADD COLUMN commission_amount REAL DEFAULT 0.0",
+            "ALTER TABLE orders ADD COLUMN shop_payout REAL DEFAULT 0.0",
         ]:
             try:
                 conn.execute(text(stmt))

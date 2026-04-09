@@ -24,7 +24,7 @@ function StatCard({ title, value, sub, icon }) {
   )
 }
 
-const TABS = ['Overview', 'Pending Shops', 'Customers', 'Shop Owners', 'Settings']
+const TABS = ['Overview', 'Pending Shops', 'Customers', 'Shop Owners', 'Earnings', 'Settings']
 
 const NOTIF_KEYS = [
   { key: 'notification_order_placed',    label: 'Order placed (to customer)',    vars: '{ref}, {shop}, {pickup_start}, {pickup_end}, {item}' },
@@ -53,8 +53,13 @@ export default function AdminPanel() {
   const [settingsMsg, setSettingsMsg] = useState(null)
   const [newCategory, setNewCategory] = useState('')
 
+  // Earnings state
+  const [earnings, setEarnings] = useState(null)
+  const [earningsLoading, setEarningsLoading] = useState(false)
+
   useEffect(() => { fetchAll() }, [])
   useEffect(() => { if (tab === 'Settings' && !settings) fetchSettings() }, [tab])
+  useEffect(() => { if (tab === 'Earnings' && !earnings) fetchEarnings() }, [tab])
 
   const fetchAll = async () => {
     setLoading(true)
@@ -82,6 +87,18 @@ export default function AdminPanel() {
       setSettings(res.data)
     } catch (err) {
       console.error(err)
+    }
+  }
+
+  const fetchEarnings = async () => {
+    setEarningsLoading(true)
+    try {
+      const res = await api.get('/admin/earnings')
+      setEarnings(res.data)
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setEarningsLoading(false)
     }
   }
 
@@ -426,6 +443,74 @@ export default function AdminPanel() {
         </div>
       )}
 
+      {/* ── Earnings ── */}
+      {tab === 'Earnings' && (
+        <div>
+          {earningsLoading || !earnings ? (
+            <div className="card p-10 text-center text-gray-400">
+              <div className="animate-spin w-6 h-6 border-2 border-primary-600 border-t-transparent rounded-full mx-auto mb-3" />
+              Loading earnings…
+            </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                <StatCard title="Total commission earned" value={formatPrice(earnings.total_commission)} sub={`from ${earnings.completed_orders} completed orders`} icon="💵" />
+                <StatCard title="This month" value={formatPrice(earnings.this_month_commission)} sub="commission revenue" icon="📅" />
+                <StatCard title="Last month" value={formatPrice(earnings.last_month_commission)} sub="commission revenue" icon="🗓️" />
+                <StatCard title="Total shop payouts" value={formatPrice(earnings.total_payout)} sub="paid out to shops" icon="🏦" />
+              </div>
+
+              <div className="card overflow-hidden">
+                <div className="px-5 py-4 border-b border-gray-100">
+                  <h3 className="font-semibold text-gray-900">Per-shop breakdown</h3>
+                  <p className="text-xs text-gray-400 mt-0.5">Based on all picked-up (completed) orders</p>
+                </div>
+                {earnings.per_shop.length === 0 ? (
+                  <div className="p-10 text-center text-gray-400">
+                    <p className="text-4xl mb-2">📊</p>
+                    <p>No completed orders yet</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="bg-gray-50 text-left border-b border-gray-100">
+                          <th className="px-4 py-3 font-medium text-gray-500">Shop</th>
+                          <th className="px-4 py-3 font-medium text-gray-500 text-right">Orders</th>
+                          <th className="px-4 py-3 font-medium text-gray-500 text-right">Total revenue</th>
+                          <th className="px-4 py-3 font-medium text-gray-500 text-right">Commission (10%)</th>
+                          <th className="px-4 py-3 font-medium text-gray-500 text-right">Shop payout</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {earnings.per_shop.map(s => (
+                          <tr key={s.shop_id} className="hover:bg-gray-50">
+                            <td className="px-4 py-3 font-medium text-gray-900">{s.shop_name}</td>
+                            <td className="px-4 py-3 text-gray-600 text-right">{s.orders}</td>
+                            <td className="px-4 py-3 text-gray-700 text-right">{formatPrice(s.revenue)}</td>
+                            <td className="px-4 py-3 text-primary-700 font-semibold text-right">{formatPrice(s.commission)}</td>
+                            <td className="px-4 py-3 text-gray-600 text-right">{formatPrice(s.payout)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot className="bg-gray-50 border-t border-gray-200">
+                        <tr>
+                          <td className="px-4 py-3 font-semibold text-gray-700">Total</td>
+                          <td className="px-4 py-3 font-semibold text-gray-700 text-right">{earnings.completed_orders}</td>
+                          <td className="px-4 py-3 font-semibold text-gray-700 text-right">{formatPrice(earnings.total_revenue)}</td>
+                          <td className="px-4 py-3 font-bold text-primary-700 text-right">{formatPrice(earnings.total_commission)}</td>
+                          <td className="px-4 py-3 font-semibold text-gray-700 text-right">{formatPrice(earnings.total_payout)}</td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
       {/* ── Settings ── */}
       {tab === 'Settings' && (
         <div className="space-y-6">
@@ -482,6 +567,33 @@ export default function AdminPanel() {
                     className="btn-primary text-sm px-4 disabled:opacity-50"
                   >
                     Add
+                  </button>
+                </div>
+              </div>
+
+              {/* ── Commission ── */}
+              <div className="card p-6">
+                <h2 className="font-semibold text-gray-900 mb-1">Commission rate</h2>
+                <p className="text-sm text-gray-500 mb-4">
+                  Percentage the platform earns from each completed order. Applied to all new orders immediately.
+                </p>
+                <div className="flex items-end gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Commission (%)</label>
+                    <input
+                      type="number" min={0} max={50} step={0.5}
+                      className="input-field w-32"
+                      value={Math.round((settings.commission_rate ?? 0.10) * 100)}
+                      onChange={e => setSettings(s => ({ ...s, commission_rate: Number(e.target.value) / 100 }))}
+                    />
+                    <p className="text-xs text-gray-400 mt-1">Currently {Math.round((settings.commission_rate ?? 0.10) * 100)}%</p>
+                  </div>
+                  <button
+                    onClick={() => saveSettings({ commission_rate: settings.commission_rate ?? 0.10 })}
+                    disabled={settingsLoading}
+                    className="btn-primary text-sm mb-6"
+                  >
+                    {settingsLoading ? 'Saving…' : 'Save rate'}
                   </button>
                 </div>
               </div>

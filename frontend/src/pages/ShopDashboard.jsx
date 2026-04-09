@@ -235,7 +235,7 @@ export default function ShopDashboard() {
 
       {/* Stats Grid */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <StatCard title="Total revenue" value={`${formatPrice(stats?.total_revenue || 0)} UZS`} sub="from completed orders" icon="💰" color="text-primary-600" />
+        <StatCard title="Your earnings" value={`${formatPrice(stats?.total_payout ?? stats?.total_revenue ?? 0)} UZS`} sub={stats?.commission_total ? `−${formatPrice(stats.commission_total)} UZS platform commission` : 'from completed orders'} icon="💰" color="text-primary-600" />
         <StatCard title="Total orders" value={stats?.total_orders || 0} sub="all time" icon="📦" />
         <StatCard title="Items listed" value={stats?.items_listed || 0} sub="active listings" icon="🍽️" />
         <StatCard title="Avg. rating" value={stats?.avg_rating ? `${stats.avg_rating} ⭐` : '—'} sub="customer reviews" icon="⭐" color="text-yellow-600" />
@@ -247,7 +247,7 @@ export default function ShopDashboard() {
         {/* Revenue chart — spans 2 cols */}
         <div className="card p-5 lg:col-span-2">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="font-semibold text-gray-900">Revenue (×1,000 UZS)</h2>
+            <h2 className="font-semibold text-gray-900">Net earnings (×1,000 UZS)</h2>
             {stats?.range_start && (
               <span className="text-xs text-gray-400">
                 {new Date(stats.range_start).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} –{' '}
@@ -266,7 +266,7 @@ export default function ShopDashboard() {
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
               <XAxis dataKey="date" tick={{ fontSize: 11 }} />
               <YAxis tick={{ fontSize: 11 }} />
-              <Tooltip formatter={(v) => [`${v}K UZS`, 'Revenue']} />
+              <Tooltip formatter={(v) => [`${v}K UZS`, 'Net earnings']} />
               <Area type="monotone" dataKey="revenue" stroke="#1a7548" strokeWidth={2} fill="url(#revenueGradient)" />
             </AreaChart>
           </ResponsiveContainer>
