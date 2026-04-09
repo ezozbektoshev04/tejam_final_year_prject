@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
 import api from '../api/axios'
 import { validateEmail, validateRequired, validatePhone, validatePassword, validateConfirm } from '../utils/validate'
+import ImageUpload from '../components/ImageUpload'
 
 function formatPrice(p) {
   return new Intl.NumberFormat('uz-UZ').format(Math.round(p))
@@ -322,22 +323,11 @@ export default function Profile() {
               </div>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Cover image URL</label>
-              <input
-                type="text"
-                className="input-field"
+              <label className="block text-sm font-medium text-gray-700 mb-1">Cover image</label>
+              <ImageUpload
                 value={shopForm.image_url || ''}
-                onChange={e => setShopForm(f => ({ ...f, image_url: e.target.value }))}
-                placeholder="https://…"
+                onChange={url => setShopForm(f => ({ ...f, image_url: url }))}
               />
-              {shopForm.image_url && (
-                <img
-                  src={shopForm.image_url}
-                  alt="preview"
-                  className="mt-2 h-24 rounded-lg object-cover"
-                  onError={e => { e.target.style.display = 'none' }}
-                />
-              )}
             </div>
             <Alert msg={shopMsg} />
             <button type="submit" disabled={shopLoading} className="btn-primary text-sm">

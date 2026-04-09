@@ -23,7 +23,8 @@ export default function ImageUpload({ value, onChange }) {
     try {
       const formData = new FormData()
       formData.append('file', file)
-      const res = await api.post('/uploads/image', formData, {
+      const res = await api.post('/image', formData, {
+        baseURL: '/uploads',
         headers: { 'Content-Type': 'multipart/form-data' },
       })
       onChange(res.data.url)

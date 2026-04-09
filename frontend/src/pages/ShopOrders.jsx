@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import React, { useEffect, useState, useCallback } from 'react'
 import api from '../api/axios'
 
 const STATUS_CONFIG = {
@@ -299,7 +299,7 @@ export default function ShopOrders() {
                   const ps = getPaymentStatus(order)
                   const isExpanded = expandedId === order.id
                   return (
-                    <>
+                    <React.Fragment key={order.id}>
                       <tr
                         key={order.id}
                         className="hover:bg-gray-50 cursor-pointer"
@@ -381,7 +381,7 @@ export default function ShopOrders() {
                           </td>
                         </tr>
                       )}
-                    </>
+                    </React.Fragment>
                   )
                 })}
               </tbody>
