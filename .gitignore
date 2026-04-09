@@ -6,6 +6,7 @@ backend/*.pyc
 backend/tejam.db
 backend/instance/
 backend/uploads/
+backend/utils/__pycache__/
 
 # Environment variables
 backend/.env
