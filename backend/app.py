@@ -49,7 +49,10 @@ def create_app(config_class=Config):
         db.create_all()
         _migrate_db()
         _seed_settings()
-        seed_database(app)
+        # Auto-seed only when explicitly enabled (e.g. first deploy or local dev).
+        # In production, set SEED_DB=0 (or unset) to skip on every restart.
+        if os.environ.get("SEED_DB", "1") == "1":
+            seed_database(app)
 
     return app
 
