@@ -1,15 +1,35 @@
 import os
+import re
+import sys
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
+
+def _extract_code(html: str) -> str:
+    """Best-effort: pull a 4–8 digit verification code out of the HTML body for log visibility."""
+    m = re.search(r"\b(\d{4,8})\b", html)
+    return m.group(1) if m else ""
+
+
 def _send(to: str, subject: str, html: str) -> bool:
-    """Send an email via Gmail SMTP. Falls back to console log if not configured."""
+    """Send an email via Gmail SMTP. Falls back to a loud stderr log if Gmail isn't configured."""
     GMAIL_USER = os.getenv("GMAIL_USER", "")
     GMAIL_APP_PASSWORD = os.getenv("GMAIL_APP_PASSWORD", "")
     if not GMAIL_USER or not GMAIL_APP_PASSWORD:
-        print(f"\n[EMAIL] To: {to}\n[EMAIL] Subject: {subject}\n[EMAIL] (Gmail not configured — set GMAIL_USER and GMAIL_APP_PASSWORD)\n")
-        return True
+        # Loud stderr log so it shows up clearly in `journalctl -u tejam`.
+        # Also extract any verification code so admins can hand it to users manually.
+        code = _extract_code(html)
+        print(
+            "\n!!! EMAIL NOT SENT — Gmail not configured (set GMAIL_USER and GMAIL_APP_PASSWORD) !!!"
+            f"\n    To:      {to}"
+            f"\n    Subject: {subject}"
+            + (f"\n    Code:    {code}" if code else "")
+            + "\n",
+            file=sys.stderr,
+            flush=True,
+        )
+        return True  # keep returning True so callers don't surface a generic error to users
     try:
         msg = MIMEMultipart("alternative")
         msg["Subject"] = subject
@@ -22,7 +42,7 @@ def _send(to: str, subject: str, html: str) -> bool:
             server.sendmail(GMAIL_USER, to, msg.as_string())
         return True
     except Exception as e:
-        print(f"[EMAIL ERROR] {e}")
+        print(f"[EMAIL ERROR] failed sending to {to}: {e}", file=sys.stderr, flush=True)
         return False
 
 

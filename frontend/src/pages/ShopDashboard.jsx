@@ -138,7 +138,7 @@ export default function ShopDashboard() {
     try {
       const token = localStorage.getItem('access_token')
       const res = await fetch(
-        `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/reports/export?${params}`,
+        `/api/reports/export?${params}`,
         { headers: { Authorization: `Bearer ${token}` } }
       )
       if (!res.ok) { const err = await res.json(); alert(err.error || 'Export failed'); return }

@@ -175,7 +175,7 @@ export default function AdminPanel() {
       if (end)   params.set('end',   end)
       const token = localStorage.getItem('access_token')
       const res = await fetch(
-        `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/admin/earnings/export?${params}`,
+        `/api/admin/earnings/export?${params}`,
         { headers: { Authorization: `Bearer ${token}` } }
       )
       if (!res.ok) { const e = await res.json(); alert(e.error || 'Export failed'); return }

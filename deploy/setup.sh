@@ -137,7 +137,29 @@ else
   echo "==> $ENV_FILE already exists — leaving it alone."
 fi
 
-# ---- 4. Frontend build -------------------------------------------------------
+# ---- 4. Frontend env + build -------------------------------------------------
+
+# frontend/.env is gitignored, so create a stub if it doesn't exist.
+# VITE_* variables are baked into the bundle at build time, so this file MUST
+# exist BEFORE `npm run build`.
+FRONTEND_ENV="$APP_DIR/frontend/.env"
+if [ ! -f "$FRONTEND_ENV" ]; then
+  echo "==> Creating $FRONTEND_ENV stub..."
+  cat > "$FRONTEND_ENV" <<'EOF'
+# Frontend build-time variables (baked into the bundle).
+# After editing this file, you MUST rebuild: cd /var/www/tejam/frontend && npm run build
+#
+# Get a Yandex Maps JavaScript API key at https://developer.tech.yandex.ru/
+# Restrict it to your domain for safety.
+VITE_YANDEX_MAPS_API_KEY=
+EOF
+  chown "$SERVICE_USER:$SERVICE_USER" "$FRONTEND_ENV"
+  echo
+  echo "!! NOTE: $FRONTEND_ENV was created empty."
+  echo "!! Fill in VITE_YANDEX_MAPS_API_KEY (and any other VITE_* keys),"
+  echo "!! then re-run this script (or just: cd $APP_DIR/frontend && npm run build)."
+  echo
+fi
 
 echo "==> Building frontend (npm install + npm run build)..."
 sudo -u "$SERVICE_USER" bash -c "cd '$APP_DIR/frontend' && npm install && npm run build"

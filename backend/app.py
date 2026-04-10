@@ -1,4 +1,5 @@
 import os
+import sys
 from flask import Flask
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
@@ -11,7 +12,35 @@ bcrypt = Bcrypt()
 jwt = JWTManager()
 
 
+def _warn_missing_env():
+    """Print a one-shot startup warning to stderr listing missing optional integrations.
+    Helps surface silently-degraded features in production logs."""
+    warnings = []
+    if not os.environ.get("GEMINI_API_KEY"):
+        warnings.append("GEMINI_API_KEY missing — AI features will return canned fallbacks.")
+    if not os.environ.get("STRIPE_SECRET_KEY"):
+        warnings.append("STRIPE_SECRET_KEY missing — payment endpoints will error.")
+    elif os.environ.get("STRIPE_SECRET_KEY", "").startswith("sk_test_"):
+        warnings.append("STRIPE_SECRET_KEY is a TEST key — real cards will be rejected.")
+    if not os.environ.get("GMAIL_USER") or not os.environ.get("GMAIL_APP_PASSWORD"):
+        warnings.append("GMAIL_USER / GMAIL_APP_PASSWORD missing — emails will only be logged, not delivered.")
+    secret = os.environ.get("SECRET_KEY", "")
+    if not secret or secret.startswith("dev-"):
+        warnings.append("SECRET_KEY is the dev default — set a real one in .env.")
+    jwt_secret = os.environ.get("JWT_SECRET_KEY", "")
+    if not jwt_secret or jwt_secret.startswith("jwt-"):
+        warnings.append("JWT_SECRET_KEY is the dev default — set a real one in .env.")
+
+    if warnings:
+        print("\n=== TEJAM STARTUP WARNINGS ===", file=sys.stderr)
+        for w in warnings:
+            print(f"  - {w}", file=sys.stderr)
+        print("==============================\n", file=sys.stderr, flush=True)
+
+
 def create_app(config_class=Config):
+    _warn_missing_env()
+
     app = Flask(__name__)
     app.config.from_object(config_class)
 
